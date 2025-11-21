@@ -1,25 +1,44 @@
-# NATS Client
+Here is the fully updated `README.md` reflecting the current, robust state of the application.
 
-A lightweight, dependency-light web client for [NATS](https://nats.io/). Built with **Vanilla JavaScript**, **Vite**, and standard CSS. No heavy frontend frameworks, no complex state management libraries, just direct DOM manipulation and NATS WebSockets.
+---
+
+# NATS Web Client 🪨
+
+A lightweight, dependency-light web client for [NATS](https://nats.io/). Built with **Vanilla JavaScript**, **Vite**, and standard CSS.
+
+This tool acts as a web utility for NATS developers, providing a UI for Messaging, Key-Value Store management, and JetStream administration directly from your browser.
 
 ## Features
 
-*   **Zero Framework Overhead:** Built with Vanilla JS and native ESM modules.
-*   **NATS Authentication:** Full support for **User JWTs/NKEYs** via `.creds` files.
-*   **Messaging:**
-    *   Real-time Publish / Subscribe.
-    *   Request / Reply (RPC) with configurable timeouts.
-    *   Support for NATS Headers.
-    *   JSON Auto-formatting and Syntax Highlighting.
-*   **JetStream KV Store:**
-    *   Browse Buckets.
-    *   List Keys.
-    *   Get / Put / Delete values visually.
-*   **Developer UX:**
-    *   Local History (remembers subjects and URLs).
-    *   Responsive Design (Works on Mobile/Tablet).
-    *   Connection Stats (RTT/Latency).
-    *   Pause/Resume Log scrolling.
+### Connection & Authentication
+*   **WebSocket Support:** Connects directly to NATS servers via `ws://` or `wss://`.
+*   **Authentication:** Supports **User/Password**, **Token**, and **.creds (JWT/NKEY)** files.
+*   **History:** Remembers previous connection URLs for quick switching.
+*   **Stats:** Real-time RTT/Latency monitoring.
+
+### Messaging (Pub/Sub)
+*   **Publish:** Send messages with payloads and Headers (JSON). `Ctrl + Enter` to send.
+*   **Subscribe:** Real-time message logging with JSON auto-formatting and syntax highlighting.
+*   **Request/Reply:** Perform RPC calls with configurable timeouts.
+*   **QoL:** 
+    *   **Click-to-Fill:** Click a subscription subject to immediately target it for publishing.
+    *   **Local History:** Remembers recently used subjects.
+    *   **Pause/Resume:** Pause the log flow to inspect high-traffic subjects.
+
+### JetStream KV Store
+*   **Management:** Create, Edit, and Delete KV Buckets using raw JSON configuration.
+*   **Real-time Watch:** The key list updates instantly when keys are added/removed by other clients.
+*   **CRUD:** Get, Put, and Delete keys.
+*   **History:** View **Revision History** for any key to see how values changed over time.
+*   **UX:** One-click Copy for values, JSON validation.
+
+### Stream Management
+*   **Admin:** List, Create, Edit, and Delete JetStream Streams.
+*   **Configuration:** Full control over Retention, Storage (File/Memory), Subjects, and Limits via JSON templates.
+*   **Inspection:**
+    *   **Consumer List:** View all consumers on a stream, identifying Durable vs Ephemeral and monitoring **Pending/Lag** counts.
+    *   **Message Inspector:** Fetch raw messages from the stream by specifying a **Sequence Range** (e.g., "Load messages 100-150").
+*   **Actions:** Purge stream messages.
 
 ## Prerequisites
 
@@ -28,14 +47,7 @@ A lightweight, dependency-light web client for [NATS](https://nats.io/). Built w
 
 ## Getting Started
 
-### 1. Clone and Install
-```bash
-git clone https://github.com/yourusername/nats-grug-client.git
-cd nats-grug-client
-npm install
-```
-
-### 2. Configure NATS Server
+### 1. Configure NATS Server
 **Crucial Step:** Browsers cannot connect to NATS via raw TCP (port 4222). You **must** enable WebSockets on your NATS server.
 
 Create a `nats.conf` file:
@@ -45,7 +57,7 @@ websocket {
     no_tls: true  # Set to false if using SSL/HTTPS
 }
 
-# Enable JetStream for KV support
+# Enable JetStream for KV and Stream support
 jetstream {
     store_dir: './data'
 }
@@ -56,50 +68,55 @@ Run the server:
 nats-server -c nats.conf
 ```
 
-### 3. Run the Client
+### 2. Install and Run
 ```bash
+# Install dependencies
+npm install
+
+# Run local dev server
 npm run dev
 ```
-Open your browser to `http://localhost:5173` (or the port Vite assigns).
+Open your browser to `http://localhost:5173`.
 
 ## Usage Guide
 
 ### Connection
-1.  **URL:** Use the WebSocket URL (e.g., `ws://localhost:9222` or `wss://your-domain.com`).
-2.  **Creds:** (Optional) Upload your `.creds` file. 
+1.  Enter your WebSocket URL (e.g., `ws://localhost:9222`).
+2.  (Optional) Enter a Token, User/Pass, or upload a `.creds` file.
 3.  Click **Connect**.
 
-### Messaging Tab
-*   **Subscribe:** Enter a subject (e.g., `orders.>`) and hit Enter. Messages appear in the log below.
-*   **Publish:** Enter a subject and payload. `Ctrl + Enter` sends the message.
-*   **Request:** Sends a message and waits for a reply (RPC).
-*   **Pause:** Useful for high-traffic subjects. Stops the DOM from updating so you can inspect messages.
+### Streams Tab
+*   **Create:** Click `+` to open the JSON configuration modal. A template with common defaults (Limits, File Storage) is provided.
+*   **Edit:** Select a stream and click **Edit** to modify its configuration (e.g., add subjects).
+*   **Inspect:** 
+    *   Click **Load Consumers** to see who is reading from the stream.
+    *   Enter a Start/End Sequence and click **Load** to view specific raw messages stored in the stream (Max 50 at a time).
 
 ### KV Store Tab
-*   **Refresh Buckets:** Lists all Key-Value buckets in your JetStream account.
-*   **Keys:** Select a bucket to view keys. Click a key to view its value.
-*   **Edit:** Modify the value and click **Put / Update** to save.
+*   **Create/Edit:** Uses the same JSON configuration approach as streams.
+*   **Watch:** Just select a bucket. The key list is a live view.
+*   **History:** Click a key to see its current value and a list of previous revisions below it.
 
 ## Project Structure
 
-Designed to be easily readable by developers of any skill level.
+Designed to be easily readable and hackable.
 
 ```text
 ├── index.html        # The skeleton. Semantic HTML5.
-├── style.css         # The skin. CSS Variables, Grid, Flexbox.
+├── style.css         # The skin. CSS Variables, Grid, Flexbox, Mobile responsive.
 ├── main.js           # The brain. Ties UI events to Logic.
 ├── nats-client.js    # The engine. Wraps nats.ws and @nats-io/kv.
 ├── ui.js             # The painter. Handles DOM updates, Toasts, Tabs.
 ├── dom.js            # The map. Centralized references to HTML elements.
-└── utils.js          # The tools. Formatters, LocalStorage helpers.
+└── utils.js          # The tools. Formatters, Validators, History helpers.
 ```
 
 ## Contributing
 
 1.  Fork it.
-2.  Keep it simple.
+2.  Keep it simple
 3.  Submit a Pull Request.
 
 ## License
 
-MIT License. Do whatever you want with it.
+MIT License.
