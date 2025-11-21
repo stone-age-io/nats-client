@@ -11,8 +11,21 @@ if (savedPubSubj) els.pubSubject.value = savedPubSubj;
 
 // --- EVENT LISTENERS ---
 
-// 1. CONNECT
+// 1. CONNECT / DISCONNECT TOGGLE
 els.btnConnect.addEventListener("click", async () => {
+  // A. DISCONNECT FLOW
+  if (nats.isConnected()) {
+    try {
+      await nats.disconnect();
+      ui.setConnectionState(false);
+      ui.showToast("Disconnected", "info");
+    } catch (err) {
+      ui.showToast(`Error disconnecting: ${err.message}`, "error");
+    }
+    return; 
+  }
+
+  // B. CONNECT FLOW
   try {
     localStorage.setItem("nats_url", els.url.value);
     els.statusText.innerText = "Connecting...";
@@ -20,13 +33,7 @@ els.btnConnect.addEventListener("click", async () => {
     const file = els.creds.files.length > 0 ? els.creds.files[0] : null;
     await nats.connectToNats(els.url.value, file);
 
-    els.statusText.innerText = "Connected";
-    els.statusText.style.color = "#4CAF50";
-    els.statusDot.classList.add("connected");
-    els.btnConnect.disabled = true;
-    els.url.disabled = true; 
-    els.subPanel.style.display = "flex";
-    els.appPanel.style.display = "flex";
+    ui.setConnectionState(true);
     ui.showToast("Connected to NATS", "success");
   } catch (err) {
     els.statusText.innerText = "Error";
@@ -130,7 +137,7 @@ els.pubHeaders.addEventListener("blur", () => utils.beautify(els.pubHeaders));
 els.kvValueInput.addEventListener("blur", () => utils.beautify(els.kvValueInput));
 els.btnClear.addEventListener("click", () => els.messages.innerHTML = "");
 els.logFilter.addEventListener("keyup", (e) => ui.filterLogs(e.target.value));
-els.btnPause.addEventListener("click", ui.toggleLogPause); // Wire up pause
+els.btnPause.addEventListener("click", ui.toggleLogPause);
 
 els.btnHeaderToggle.addEventListener("click", () => {
   const isHidden = els.headerContainer.style.display === "none";

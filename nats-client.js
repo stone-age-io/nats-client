@@ -12,6 +12,9 @@ let statsInterval = null;
 
 // --- CONNECTION ---
 export async function connectToNats(url, credsFile) {
+  // Clean up any previous state just in case
+  await disconnect(); 
+
   const opts = { servers: url, ignoreClusterUpdates: true };
 
   if (credsFile) {
@@ -28,6 +31,20 @@ export async function connectToNats(url, credsFile) {
   return nc;
 }
 
+export async function disconnect() {
+  if (statsInterval) clearInterval(statsInterval);
+  
+  if (nc) {
+    await nc.close();
+    nc = null;
+  }
+  
+  // Reset Internal State
+  kv = null;
+  subscriptions.clear();
+  subCounter = 0;
+}
+
 export function isConnected() { return !!nc; }
 
 export function getServerInfo() {
@@ -40,7 +57,6 @@ function startStatsLoop() {
   statsInterval = setInterval(async () => {
     if (!nc || nc.isClosed()) return;
     try {
-      // Measure RTT
       const rtt = await nc.rtt();
       els.rttLabel.innerText = `RTT: ${rtt}ms`;
       els.rttLabel.style.opacity = 1;

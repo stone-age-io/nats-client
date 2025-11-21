@@ -5,10 +5,7 @@ export function showToast(msg, type = "info") {
   const div = document.createElement("div");
   div.className = `toast ${type}`;
   div.innerText = msg;
-  
   els.toastContainer.appendChild(div);
-  
-  // Remove after 3.5s (allow animation time)
   setTimeout(() => {
     div.classList.add("hiding");
     div.addEventListener("animationend", () => div.remove());
@@ -17,7 +14,6 @@ export function showToast(msg, type = "info") {
 
 // --- LOG PAUSE ---
 let isPaused = false;
-
 export function toggleLogPause() {
   isPaused = !isPaused;
   els.btnPause.innerText = isPaused ? "Resume" : "Pause";
@@ -40,9 +36,42 @@ export function switchTab(mode) {
   }
 }
 
+// --- CONNECTION STATE UI ---
+export function setConnectionState(isConnected) {
+  if (isConnected) {
+    // CONNECTED STATE
+    els.btnConnect.innerText = "Disconnect";
+    els.btnConnect.className = "danger"; // Switch to Red
+    els.url.disabled = true;
+    els.creds.disabled = true;
+    els.subPanel.style.display = "flex";
+    els.appPanel.style.display = "flex";
+    els.statusText.innerText = "Connected";
+    els.statusText.style.color = "#4CAF50";
+    els.statusDot.className = "status-dot connected";
+  } else {
+    // DISCONNECTED STATE
+    els.btnConnect.innerText = "Connect";
+    els.btnConnect.className = "primary"; // Switch to Green
+    els.url.disabled = false;
+    els.creds.disabled = false;
+    els.subPanel.style.display = "none";
+    els.appPanel.style.display = "none";
+    els.statusText.innerText = "Disconnected";
+    els.statusText.style.color = "var(--muted)";
+    els.statusDot.className = "status-dot";
+    els.rttLabel.style.opacity = 0;
+    
+    // Clear specific UI elements
+    els.subList.innerHTML = "";
+    els.subCount.innerText = "(0)";
+    // Note: We deliberately DO NOT clear the logs here, users might want to read them after disconnect.
+  }
+}
+
 // --- LOG RENDERING ---
 export function renderMessage(subject, data, isRpc = false, msgHeaders = null) {
-  if (isPaused && !isRpc) return; // Ignore subscription messages when paused
+  if (isPaused && !isRpc) return;
 
   const filterText = els.logFilter.value.toLowerCase();
   const fullText = (subject + data).toLowerCase();
@@ -98,12 +127,4 @@ export function filterLogs(val) {
 export function setKvStatus(msg, isErr = false) {
   els.kvStatus.innerText = msg;
   els.kvStatus.style.color = isErr ? "var(--danger)" : "var(--accent)";
-}
-
-export function renderKvKeys(keys) {
-  if (keys.length === 0) {
-    els.kvKeyList.innerHTML = '<div class="kv-empty">No keys found</div>';
-    return;
-  }
-  els.kvKeyList.innerHTML = '';
 }
