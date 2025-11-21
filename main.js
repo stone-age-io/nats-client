@@ -69,7 +69,43 @@ els.btnInfo.addEventListener("click", () => {
   els.infoModal.style.display = "flex";
 });
 els.btnCloseModal.addEventListener("click", () => els.infoModal.style.display = "none");
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") els.infoModal.style.display = "none"; });
+
+// --- CONFIG MODAL HELPERS ---
+let activeConfigAction = null; 
+
+function openConfigModal(title, templateJson, actionCallback) {
+    els.configModalTitle.innerText = title;
+    els.configInput.value = JSON.stringify(templateJson, null, 2);
+    activeConfigAction = actionCallback;
+    els.configModal.style.display = "flex";
+    els.configInput.classList.remove("input-error");
+}
+
+function closeConfigModal() {
+    els.configModal.style.display = "none";
+    activeConfigAction = null;
+}
+
+els.btnCloseConfigModal.addEventListener("click", closeConfigModal);
+els.btnConfigSave.addEventListener("click", async () => {
+    if(!utils.validateJsonInput(els.configInput)) {
+        ui.showToast("Invalid JSON", "error");
+        return;
+    }
+    if(activeConfigAction) {
+        const config = JSON.parse(els.configInput.value);
+        await activeConfigAction(config);
+    }
+});
+
+els.configInput.addEventListener("input", () => utils.validateJsonInput(els.configInput));
+
+document.addEventListener("keydown", (e) => { 
+    if (e.key === "Escape") {
+        els.infoModal.style.display = "none";
+        closeConfigModal();
+    }
+});
 
 // 3. TABS
 els.tabMsg.onclick = () => ui.switchTab('msg');
@@ -161,14 +197,59 @@ els.btnHeaderToggle.addEventListener("click", () => {
 });
 
 // --- KV LOGIC ---
-els.btnKvCreate.addEventListener("click", async () => {
-    const name = prompt("Enter new bucket name:");
-    if(!name) return;
+els.btnKvCreate.addEventListener("click", () => {
+    const template = {
+        bucket: "new-bucket",
+        history: 5,
+        description: "My KV Bucket",
+        storage: "file", // or "memory"
+        replicas: 1
+    };
+    
+    openConfigModal("Create KV Bucket", template, async (config) => {
+        try {
+            await nats.createKvBucket(config);
+            ui.showToast(`Bucket ${config.bucket} created`, "success");
+            closeConfigModal();
+            loadKvBucketsWrapper();
+        } catch(e) {
+            ui.showToast(e.message, "error");
+        }
+    });
+});
+
+els.btnKvEdit.addEventListener("click", async () => {
+    const bucket = els.kvBucketSelect.value;
+    if(!bucket) {
+        ui.showToast("Select a bucket first", "info");
+        return;
+    }
     try {
-        await nats.createKvBucket(name);
-        ui.showToast(`Bucket ${name} created`, "success");
-        loadKvBucketsWrapper();
-    } catch(e) { ui.showToast(e.message, "error"); }
+        const status = await nats.getKvStatus();
+        
+        const editableConfig = {
+            bucket: status.bucket,
+            history: status.history,
+            description: status.streamInfo.config.description || "",
+            storage: status.storage,
+            replicas: status.replicas, 
+            ttl: status.ttl,
+            maxBucketSize: status.streamInfo.config.max_bytes,
+            maxValueSize: status.streamInfo.config.max_msg_size
+        };
+
+        openConfigModal(`Edit KV: ${bucket}`, editableConfig, async (config) => {
+            try {
+                await nats.updateKvBucket(config);
+                ui.showToast(`Bucket ${bucket} updated`, "success");
+                closeConfigModal();
+            } catch(e) {
+                ui.showToast(e.message, "error");
+            }
+        });
+    } catch(e) {
+        ui.showToast("Error fetching KV status: " + e.message, "error");
+    }
 });
 
 async function loadKvBucketsWrapper() {
@@ -301,6 +382,57 @@ els.btnKvDelete.addEventListener("click", async () => {
 // --- STREAM LOGIC ---
 let currentStream = null;
 
+els.btnStreamCreate.addEventListener("click", () => {
+    const template = {
+        name: "NEW_STREAM",
+        description: "Stream Description",
+        subjects: ["events.>"],
+        retention: "limits", 
+        max_msgs: -1,
+        max_bytes: -1,
+        // 0 = infinite. 1h = 3600000000000, 24h = 86400000000000
+        max_age: 0, 
+        discard: "old",
+        storage: "file",
+        num_replicas: 1,
+        // 2 minutes in ns
+        duplicate_window: 120000000000 
+    };
+    
+    openConfigModal("Create Stream", template, async (config) => {
+        try {
+            await nats.createStream(config);
+            ui.showToast(`Stream ${config.name} created`, "success");
+            closeConfigModal();
+            loadStreamsWrapper();
+        } catch(e) {
+            ui.showToast(e.message, "error");
+        }
+    });
+});
+
+els.btnStreamEdit.addEventListener("click", async () => {
+    if(!currentStream) {
+        ui.showToast("Select a stream first", "info");
+        return;
+    }
+    try {
+        const info = await nats.getStreamInfo(currentStream);
+        openConfigModal(`Edit Stream: ${currentStream}`, info.config, async (config) => {
+            try {
+                await nats.updateStream(config);
+                ui.showToast(`Stream ${currentStream} updated`, "success");
+                closeConfigModal();
+                selectStreamWrapper(currentStream); // Refresh info
+            } catch(e) {
+                ui.showToast(e.message, "error");
+            }
+        });
+    } catch(e) {
+        ui.showToast("Error fetching stream info: " + e.message, "error");
+    }
+});
+
 async function loadStreamsWrapper() {
   els.streamList.innerHTML = '<div class="kv-empty">Loading...</div>';
   try {
@@ -334,7 +466,7 @@ async function selectStreamWrapper(name, uiEl) {
   els.streamEmptyState.style.display = "none";
   els.streamDetailView.style.display = "none"; 
   // Reset message view
-  els.streamMsgContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view recent stream messages</div>`;
+  els.streamMsgContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>`;
   // Reset Consumer View
   els.consumerList.innerHTML = `<div style="padding:10px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view consumers</div>`;
 
@@ -356,6 +488,16 @@ async function selectStreamWrapper(name, uiEl) {
     els.streamLastSeq.innerText = state.last_seq;
     els.streamConsumerCount.innerText = state.consumer_count;
 
+    // AUTO-FILL SEQUENCE INPUTS FOR MESSAGES
+    const last = state.last_seq;
+    const first = state.first_seq;
+    // Default to last 50 messages
+    let start = last - 49;
+    if (start < first) start = first;
+    
+    els.msgEndSeq.value = last;
+    els.msgStartSeq.value = start > 0 ? start : 0;
+
     els.streamDetailView.style.display = "block";
   } catch (e) {
     ui.showToast(`Error loading stream info: ${e.message}`, "error");
@@ -364,15 +506,29 @@ async function selectStreamWrapper(name, uiEl) {
 
 els.btnStreamViewMsgs.addEventListener("click", async () => {
     if(!currentStream) return;
+    
+    // Validate Range
+    const start = parseInt(els.msgStartSeq.value) || 0;
+    const end = parseInt(els.msgEndSeq.value) || 0;
+    
+    if(end < start) {
+        ui.showToast("End Seq cannot be less than Start Seq", "error");
+        return;
+    }
+    if((end - start) > 50) {
+        ui.showToast("Range cannot exceed 50 messages", "error");
+        return;
+    }
+
     els.btnStreamViewMsgs.disabled = true;
     els.streamMsgContainer.innerHTML = '<div class="kv-empty">Loading...</div>';
     
     try {
-        const msgs = await nats.getRecentStreamMessages(currentStream);
+        const msgs = await nats.getStreamMessageRange(currentStream, start, end);
         els.streamMsgContainer.innerHTML = '';
         
         if(msgs.length === 0) {
-            els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found</div>';
+            els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found in range</div>';
             return;
         }
         

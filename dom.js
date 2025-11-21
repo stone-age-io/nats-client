@@ -6,27 +6,28 @@ export const els = {
   url: document.getElementById("serverUrl"),
   urlHistory: document.getElementById("urlHistory"),
   creds: document.getElementById("credsFile"),
-  // Auth Inputs
   authUser: document.getElementById("authUser"),
   authPass: document.getElementById("authPass"),
   authToken: document.getElementById("authToken"),
-  
   btnConnect: document.getElementById("btnConnect"),
   statusText: document.getElementById("statusText"),
   statusDot: document.getElementById("statusDot"),
   rttLabel: document.getElementById("rttLabel"),
   btnInfo: document.getElementById("btnInfo"),
   
-  // Modal
+  // Modals
   infoModal: document.getElementById("infoModal"),
   btnCloseModal: document.getElementById("btnCloseModal"),
   serverInfoPre: document.getElementById("serverInfoPre"),
+  configModal: document.getElementById("configModal"),
+  configModalTitle: document.getElementById("configModalTitle"),
+  btnCloseConfigModal: document.getElementById("btnCloseConfigModal"),
+  configInput: document.getElementById("configInput"),
+  btnConfigSave: document.getElementById("btnConfigSave"),
   
   // Panels
   subPanel: document.getElementById("subPanel"),
   appPanel: document.getElementById("appPanel"),
-  
-  // Sidebar
   subSubject: document.getElementById("subSubject"),
   btnSub: document.getElementById("btnSub"),
   subList: document.getElementById("subList"),
@@ -58,6 +59,7 @@ export const els = {
   // KV Store
   btnKvRefresh: document.getElementById("btnKvRefresh"),
   btnKvCreate: document.getElementById("btnKvCreate"),
+  btnKvEdit: document.getElementById("btnKvEdit"),
   kvBucketSelect: document.getElementById("kvBucketSelect"),
   kvKeyList: document.getElementById("kvKeyList"),
   kvKeyInput: document.getElementById("kvKeyInput"),
@@ -70,7 +72,9 @@ export const els = {
   kvStatus: document.getElementById("kvStatus"),
   
   // Streams
+  btnStreamCreate: document.getElementById("btnStreamCreate"),
   btnStreamRefresh: document.getElementById("btnStreamRefresh"),
+  btnStreamEdit: document.getElementById("btnStreamEdit"),
   streamList: document.getElementById("streamList"),
   streamDetailView: document.getElementById("streamDetailView"),
   streamEmptyState: document.getElementById("streamEmptyState"),
@@ -91,11 +95,13 @@ export const els = {
   btnStreamPurge: document.getElementById("btnStreamPurge"),
   btnStreamDelete: document.getElementById("btnStreamDelete"),
   
-  // Consumers (NEW)
+  // Consumers
   btnLoadConsumers: document.getElementById("btnLoadConsumers"),
   consumerList: document.getElementById("consumerList"),
 
   // Messages
+  msgStartSeq: document.getElementById("msgStartSeq"), // NEW
+  msgEndSeq: document.getElementById("msgEndSeq"), // NEW
   btnStreamViewMsgs: document.getElementById("btnStreamViewMsgs"),
   streamMsgContainer: document.getElementById("streamMsgContainer"),
 };

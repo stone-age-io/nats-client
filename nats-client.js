@@ -19,7 +19,6 @@ export async function connectToNats(url, authOptions, onDisconnectCb) {
 
   const opts = { servers: url, ignoreClusterUpdates: true };
 
-  // Handle Auth
   if (authOptions.credsFile) {
     let rawText = await authOptions.credsFile.text();
     const jwtIndex = rawText.indexOf("-----BEGIN NATS USER JWT-----");
@@ -159,15 +158,25 @@ export async function getKvBuckets() {
   return list;
 }
 
-export async function createKvBucket(name) {
+export async function createKvBucket(config) {
     const kvm = new Kvm(nc);
-    await kvm.create(name);
+    await kvm.create(config.bucket, config);
 }
 
 export async function openKvBucket(bucketName) {
   const kvm = new Kvm(nc);
   kv = await kvm.open(bucketName);
   return kv;
+}
+
+export async function getKvStatus() {
+    if(!kv) throw new Error("No bucket open");
+    return await kv.status();
+}
+
+export async function updateKvBucket(config) {
+    const kvm = new Kvm(nc);
+    await kvm.update(config.bucket, config);
 }
 
 export async function watchKvBucket(onKeyChange) {
@@ -240,6 +249,16 @@ export async function getStreams() {
   return list;
 }
 
+export async function createStream(config) {
+  const mgr = await getJsm();
+  await mgr.streams.add(config);
+}
+
+export async function updateStream(config) {
+  const mgr = await getJsm();
+  await mgr.streams.update(config.name, config);
+}
+
 export async function getStreamInfo(name) {
   const mgr = await getJsm();
   return await mgr.streams.info(name);
@@ -265,19 +284,16 @@ export async function getConsumers(streamName) {
   return list;
 }
 
-export async function getRecentStreamMessages(name, limit = 50) {
+// NEW: Get specific range of messages
+export async function getStreamMessageRange(name, startSeq, endSeq) {
     const mgr = await getJsm();
-    const info = await mgr.streams.info(name);
-    const lastSeq = info.state.last_seq;
-    const firstSeq = info.state.first_seq;
-    
-    if (info.state.messages === 0) return [];
-
-    let start = lastSeq - limit + 1;
-    if (start < firstSeq) start = firstSeq;
-
     const msgs = [];
-    for (let i = start; i <= lastSeq; i++) {
+    
+    // Ensure sequence safety
+    if(startSeq < 1) startSeq = 1;
+    if(endSeq < startSeq) return [];
+
+    for (let i = startSeq; i <= endSeq; i++) {
         try {
             const sm = await mgr.streams.getMessage(name, { seq: i });
             msgs.push({
@@ -287,7 +303,9 @@ export async function getRecentStreamMessages(name, limit = 50) {
                 time: sm.time
             });
         } catch (e) {
+            // Message missing (purged/deleted) - just skip
         }
     }
+    // Return newest first for UI display
     return msgs.reverse(); 
 }
