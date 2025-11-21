@@ -32,7 +32,7 @@
       <div style="margin-bottom:10px; color:#888; font-size:0.8rem;">
         Modify the JSON configuration below.
       </div>
-      <textarea id="configInput" rows="15" style="font-family:var(--mono); font-size:0.85rem; white-space:pre;"></textarea>
+      <textarea id="configInput" rows="15" autocorrect="off" autocapitalize="off" spellcheck="false" style="font-family:var(--mono); font-size:0.85rem; white-space:pre;"></textarea>
       <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
         <button id="btnConfigSave" class="primary">Save</button>
       </div>
@@ -54,12 +54,12 @@
       
       <div class="box">
         <div class="box-header"><h3>Connection</h3></div>
-        <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222" placeholder="ws://..." />
+        <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222" placeholder="ws://..." autocorrect="off" autocapitalize="off" spellcheck="false" />
         <datalist id="urlHistory"></datalist>
         
         <div style="margin-bottom: 10px; border-top: 1px solid #333; padding-top:10px;">
           <label>Authentication (Optional)</label>
-          <input type="text" id="authUser" placeholder="Username" style="margin-bottom: 5px;" />
+          <input type="text" id="authUser" placeholder="Username" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom: 5px;" />
           <input type="password" id="authPass" placeholder="Password" style="margin-bottom: 5px;" />
           <input type="password" id="authToken" placeholder="Token (overrides User/Pass)" />
           <div style="margin-top:5px; font-size:0.75rem; color:#666;">OR upload .creds file:</div>
@@ -74,7 +74,7 @@
           <h3>Subscriptions <span id="subCount" style="color:var(--accent)">(0)</span></h3>
         </div>
         <div style="display: flex; gap: 5px; margin-bottom: 10px; flex-shrink: 0;">
-          <input type="text" id="subSubject" list="subHistory" placeholder="Subject (Enter to add)" style="margin-bottom:0;" />
+          <input type="text" id="subSubject" list="subHistory" placeholder="Subject (Enter to add)" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:0;" />
           <button id="btnSub" class="accent icon-btn">+</button>
         </div>
         <div class="scroll-container">
@@ -99,13 +99,13 @@
           <div class="box-header"><h3>Publish / Request</h3></div>
           <div style="display: flex; gap: 10px;" class="pub-row">
             <div style="flex: 1;">
-              <input type="text" id="pubSubject" list="subHistory" placeholder="Subject" style="margin-bottom:8px;" />
-              <textarea id="pubPayload" rows="5" placeholder='Payload (Ctrl+Enter to send)' style="margin-bottom:8px;"></textarea>
+              <input type="text" id="pubSubject" list="subHistory" placeholder="Subject" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:8px;" />
+              <textarea id="pubPayload" rows="5" placeholder='Payload (Ctrl+Enter to send)' autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:8px;"></textarea>
               <div style="border-top: 1px solid #222; padding-top: 8px;">
                 <button id="btnHeaderToggle" class="sm-btn" style="width:100%; text-align:left;">► Add Headers (Optional)</button>
                 <div id="headerContainer" style="display:none; margin-top: 8px;">
                   <label>Headers (JSON format)</label>
-                  <textarea id="pubHeaders" rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
+                  <textarea id="pubHeaders" rows="3" placeholder='{"Content-Type": "application/json"}' autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
                 </div>
               </div>
             </div>
@@ -124,7 +124,7 @@
           <div class="box-header">
             <h3 style="border:none; padding:0;">Message Log</h3>
             <div style="display:flex; gap: 10px; align-items: center;">
-              <input type="text" id="logFilter" class="filter-input" placeholder="Filter logs..." />
+              <input type="text" id="logFilter" class="filter-input" placeholder="Filter logs..." autocorrect="off" autocapitalize="off" spellcheck="false" />
               <button id="btnPause" class="sm-btn" style="width: 60px;">Pause</button>
               <button id="btnClear" class="sm-btn">Clear</button>
             </div>
@@ -157,7 +157,7 @@
               <div>
                 <label>Key Name</label>
                 <div style="display:flex; gap:5px;">
-                  <input type="text" id="kvKeyInput" placeholder="Key" />
+                  <input type="text" id="kvKeyInput" placeholder="Key" autocorrect="off" autocapitalize="off" spellcheck="false" />
                   <button id="btnKvGet" class="accent">Get</button>
                 </div>
               </div>
@@ -166,7 +166,7 @@
                   <label>Value</label>
                   <button id="btnKvCopy" class="sm-btn" style="margin-bottom:4px;">Copy</button>
                 </div>
-                <textarea id="kvValueInput" style="flex-grow:1; margin-bottom:10px;" placeholder="Value"></textarea>
+                <textarea id="kvValueInput" style="flex-grow:1; margin-bottom:10px;" placeholder="Value" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
                 
                 <!-- History Section -->
                 <div style="border-top: 1px solid #333; padding-top:5px; max-height: 150px; overflow-y:auto;">

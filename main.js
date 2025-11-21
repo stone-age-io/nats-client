@@ -13,7 +13,8 @@ if (savedUrl) els.url.value = savedUrl;
 els.btnConnect.addEventListener("click", async () => {
   if (nats.isConnected()) {
     try {
-      ui.setConnectionState(false);
+      ui.setConnectionState('disconnected');
+      ui.stopRenderLoop();
       ui.showToast("Disconnected", "info");
       await nats.disconnect();
     } catch (err) {
@@ -37,16 +38,22 @@ els.btnConnect.addEventListener("click", async () => {
         token: els.authToken.value.trim()
     };
     
-    await nats.connectToNats(url, authOptions, (err) => {
-      ui.setConnectionState(false);
-      if (err) {
-        ui.showToast(`Connection Lost: ${err.message}`, "error");
-        els.statusText.innerText = "Error";
-        els.statusText.style.color = "#d32f2f";
+    await nats.connectToNats(url, authOptions, (status, err) => {
+      ui.setConnectionState(status);
+      
+      if (status === 'disconnected') {
+          ui.stopRenderLoop();
+          if (err) {
+            ui.showToast(`Connection Lost: ${err.message}`, "error");
+          }
+      } else if (status === 'connected') {
+          // Reconnected case
+          ui.showToast("Reconnected", "success");
       }
     });
 
-    ui.setConnectionState(true);
+    ui.setConnectionState('connected');
+    ui.startRenderLoop();
     ui.showToast("Connected to NATS", "success");
 
     if (els.tabKv.classList.contains('active')) {
@@ -56,8 +63,7 @@ els.btnConnect.addEventListener("click", async () => {
     }
 
   } catch (err) {
-    els.statusText.innerText = "Error";
-    els.statusText.style.color = "#d32f2f";
+    ui.setConnectionState('disconnected');
     ui.showToast(`Connection Failed: ${err.message}`, "error");
   }
 });
@@ -187,7 +193,11 @@ els.pubPayload.addEventListener("blur", () => { if(utils.validateJsonInput(els.p
 els.pubHeaders.addEventListener("blur", () => { if(utils.validateJsonInput(els.pubHeaders)) utils.beautify(els.pubHeaders); });
 els.kvValueInput.addEventListener("blur", () => { if(utils.validateJsonInput(els.kvValueInput)) utils.beautify(els.kvValueInput); });
 
-els.btnClear.addEventListener("click", () => els.messages.innerHTML = "");
+els.btnClear.addEventListener("click", () => {
+    els.messages.innerHTML = "";
+    ui.stopRenderLoop(); // clear buffer
+    ui.startRenderLoop();
+});
 els.logFilter.addEventListener("keyup", (e) => ui.filterLogs(e.target.value));
 els.btnPause.addEventListener("click", ui.toggleLogPause);
 els.btnHeaderToggle.addEventListener("click", () => {

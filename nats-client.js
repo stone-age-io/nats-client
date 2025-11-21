@@ -14,7 +14,7 @@ let subCounter = 0;
 let statsInterval = null;
 
 // --- CONNECTION ---
-export async function connectToNats(url, authOptions, onDisconnectCb) {
+export async function connectToNats(url, authOptions, onStatusChangeCb) {
   await disconnect(); 
 
   const opts = { servers: url, ignoreClusterUpdates: true };
@@ -35,8 +35,28 @@ export async function connectToNats(url, authOptions, onDisconnectCb) {
 
   nc = await connect(opts);
 
+  // Listen to status updates (Disconnects, Reconnects)
+  (async () => {
+    try {
+      for await (const s of nc.status()) {
+        switch(s.type) {
+            case "disconnect":
+                onStatusChangeCb('reconnecting'); 
+                break;
+            case "reconnect":
+                onStatusChangeCb('connected');
+                break;
+            default:
+                // console.log(s.type);
+        }
+      }
+    } catch (e) {
+        // Connection closed completely
+    }
+  })();
+
   nc.closed().then((err) => {
-    if (onDisconnectCb) onDisconnectCb(err);
+    onStatusChangeCb('disconnected', err);
   });
 
   startStatsLoop();
@@ -140,7 +160,14 @@ function parseHeaders(jsonStr) {
   try {
     const h = headers();
     const obj = JSON.parse(val);
-    for (const k in obj) h.append(k, String(obj[k]));
+    for (const k in obj) {
+        // Handle array headers
+        if(Array.isArray(obj[k])) {
+            obj[k].forEach(v => h.append(k, String(v)));
+        } else {
+            h.append(k, String(obj[k]));
+        }
+    }
     return h;
   } catch (e) {
     throw new Error("Invalid Headers JSON");
@@ -284,28 +311,32 @@ export async function getConsumers(streamName) {
   return list;
 }
 
-// NEW: Get specific range of messages
+// PERFORMANCE FIX: Parallel Fetching
 export async function getStreamMessageRange(name, startSeq, endSeq) {
     const mgr = await getJsm();
-    const msgs = [];
     
     // Ensure sequence safety
     if(startSeq < 1) startSeq = 1;
     if(endSeq < startSeq) return [];
 
+    const promises = [];
+
     for (let i = startSeq; i <= endSeq; i++) {
-        try {
-            const sm = await mgr.streams.getMessage(name, { seq: i });
-            msgs.push({
+        promises.push(
+            mgr.streams.getMessage(name, { seq: i })
+            .then(sm => ({
                 seq: sm.seq,
                 subject: sm.subject,
                 data: sc.decode(sm.data),
                 time: sm.time
-            });
-        } catch (e) {
-            // Message missing (purged/deleted) - just skip
-        }
+            }))
+            .catch(() => null) // Return null for purged/deleted messages
+        );
     }
-    // Return newest first for UI display
-    return msgs.reverse(); 
+
+    // Wait for all requests in parallel
+    const results = await Promise.all(promises);
+
+    // Filter nulls and reverse order (newest first)
+    return results.filter(m => m !== null).reverse(); 
 }
