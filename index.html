@@ -125,6 +125,7 @@
             <h3 style="border:none; padding:0;">Message Log</h3>
             <div style="display:flex; gap: 10px; align-items: center;">
               <input type="text" id="logFilter" class="filter-input" placeholder="Filter logs..." autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button id="btnDownloadLogs" class="sm-btn" title="Download Logs as JSON">⬇</button>
               <button id="btnPause" class="sm-btn" style="width: 60px;">Pause</button>
               <button id="btnClear" class="sm-btn">Clear</button>
             </div>
@@ -151,6 +152,7 @@
           <div class="kv-layout">
             <div class="kv-list">
               <label>Keys (Live Watch active)</label>
+              <input type="text" id="kvFilter" class="sm-input" placeholder="Filter keys..." style="width:100%; margin-bottom:8px; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
               <div id="kvKeyList"><div class="kv-empty">Select a bucket to view keys</div></div>
             </div>
             <div class="kv-editor">
@@ -201,6 +203,7 @@
             <!-- Stream List -->
             <div class="kv-list">
               <label>Streams</label>
+              <input type="text" id="streamFilter" class="sm-input" placeholder="Filter streams..." style="width:100%; margin-bottom:8px; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
               <div id="streamList"><div class="kv-empty">Loading...</div></div>
             </div>
 

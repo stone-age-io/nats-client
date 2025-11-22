@@ -55,6 +55,7 @@ export const els = {
   logFilter: document.getElementById("logFilter"),
   btnPause: document.getElementById("btnPause"),
   btnClear: document.getElementById("btnClear"),
+  btnDownloadLogs: document.getElementById("btnDownloadLogs"), // NEW
 
   // KV Store
   btnKvRefresh: document.getElementById("btnKvRefresh"),
@@ -70,6 +71,7 @@ export const els = {
   btnKvPut: document.getElementById("btnKvPut"),
   btnKvDelete: document.getElementById("btnKvDelete"),
   kvStatus: document.getElementById("kvStatus"),
+  kvFilter: document.getElementById("kvFilter"), // NEW
   
   // Streams
   btnStreamCreate: document.getElementById("btnStreamCreate"),
@@ -78,6 +80,7 @@ export const els = {
   streamList: document.getElementById("streamList"),
   streamDetailView: document.getElementById("streamDetailView"),
   streamEmptyState: document.getElementById("streamEmptyState"),
+  streamFilter: document.getElementById("streamFilter"), // NEW
   
   // Stream Details
   streamNameTitle: document.getElementById("streamNameTitle"),
@@ -100,8 +103,8 @@ export const els = {
   consumerList: document.getElementById("consumerList"),
 
   // Messages
-  msgStartSeq: document.getElementById("msgStartSeq"), // NEW
-  msgEndSeq: document.getElementById("msgEndSeq"), // NEW
+  msgStartSeq: document.getElementById("msgStartSeq"),
+  msgEndSeq: document.getElementById("msgEndSeq"),
   btnStreamViewMsgs: document.getElementById("btnStreamViewMsgs"),
   streamMsgContainer: document.getElementById("streamMsgContainer"),
 };
