@@ -269,6 +269,24 @@ pre { margin: 0; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; l
 .kv-key.active { background: rgba(88, 166, 255, 0.15); color: var(--accent); font-weight: 600; }
 .kv-empty { color: var(--muted); font-style: italic; padding: 30px; text-align: center; font-size: 0.9rem; }
 
+.kv-history-row {
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #333;
+  padding: 6px 4px;
+}
+.kv-history-row:hover {
+  background: #2a3038;
+}
+/* Make it finger-friendly on mobile */
+@media (max-width: 768px) {
+  .kv-history-row {
+    padding: 12px 8px; /* Big padding for Grug thumb */
+    min-height: 44px;  /* Standard touch target size */
+    font-size: 0.9rem;
+  }
+}
+
 /* Stream Info Grid */
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .info-item { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 4px; }

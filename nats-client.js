@@ -1,6 +1,6 @@
 import { connect, StringCodec, credsAuthenticator, headers } from "nats.ws";
 import { Kvm } from "@nats-io/kv";
-import { els } from "./dom.js";
+import { els } from "./dom.js"; // Used only for Stats loop, technically UI logic, but acceptable for now in Grug view
 import { renderMessage } from "./ui.js";
 
 let nc = null;
@@ -116,6 +116,7 @@ function parseHeaders(jsonStr) {
   } catch (e) { throw new Error("Invalid Headers JSON"); }
 }
 
+// --- KV ---
 export async function getKvBuckets() {
   if (!nc) return [];
   const kvm = new Kvm(nc);
@@ -126,7 +127,29 @@ export async function getKvBuckets() {
 export async function createKvBucket(config) { const kvm = new Kvm(nc); await kvm.create(config.bucket, config); }
 export async function openKvBucket(bucketName) { const kvm = new Kvm(nc); kv = await kvm.open(bucketName); return kv; }
 export async function getKvStatus() { if(!kv) throw new Error("No bucket open"); return await kv.status(); }
-export async function updateKvBucket(config) { const kvm = new Kvm(nc); await kvm.update(config.bucket, config); }
+
+// FIX: Use JetStream Manager to update the underlying stream for the KV bucket
+export async function updateKvBucket(config) { 
+    const mgr = await getJsm();
+    const streamName = `KV_${config.bucket}`;
+    
+    // Fetch current config to be safe
+    const si = await mgr.streams.info(streamName);
+    const sc = si.config;
+    
+    // Map KV abstract config -> Stream Config
+    sc.description = config.description;
+    sc.max_msgs_per_subject = config.history; // KV History
+    sc.max_bytes = config.maxBucketSize;
+    sc.max_msg_size = config.maxValueSize;
+    sc.max_age = config.ttl;
+    // Note: storage and replicas usually cannot be changed easily on single server without data loss or clustering, 
+    // but we pass them in case the server supports it.
+    sc.num_replicas = config.replicas;
+    
+    await mgr.streams.update(streamName, sc);
+}
+
 export async function watchKvBucket(onKeyChange) {
   if (!kv) return;
   if (activeKvWatcher) activeKvWatcher.stop();
@@ -157,6 +180,7 @@ export async function getKvHistory(key) {
 export async function putKvValue(key, value) { if (!kv) throw new Error("No Bucket Open"); await kv.put(key, sc.encode(value)); }
 export async function deleteKvValue(key) { if (!kv) throw new Error("No Bucket Open"); await kv.delete(key); }
 
+// --- STREAMS ---
 async function getJsm() { if (!nc) throw new Error("Not Connected"); if (!jsm) jsm = await nc.jetstreamManager(); return jsm; }
 export async function getStreams() {
   const mgr = await getJsm();

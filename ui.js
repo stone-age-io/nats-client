@@ -13,11 +13,208 @@ export function showToast(msg, type = "info") {
   }, 3500);
 }
 
+// --- HISTORY DROPDOWNS ---
+export function renderHistoryDatalist(elementId, items) {
+    const el = document.getElementById(elementId);
+    if(!el) return;
+    el.innerHTML = items.map(s => `<option value="${s}">`).join("");
+}
+
+// --- SUBSCRIPTIONS ---
+export function addSubscription(id, subject) {
+    const li = document.createElement("li");
+    li.id = `sub-li-${id}`;
+    li.innerHTML = `
+      <span style="cursor:pointer;" title="Click to copy to Publish" 
+            onclick="document.getElementById('pubSubject').value = '${subject}'">
+        ${utils.escapeHtml(subject)}
+      </span>
+      <button class="danger" onclick="window.unsubscribe(${id})">X</button>
+    `;
+    els.subList.prepend(li);
+}
+
+export function removeSubscription(id) {
+    const li = document.getElementById(`sub-li-${id}`);
+    if (li) li.remove();
+}
+
+export function updateSubCount(count) {
+    els.subCount.innerText = `(${count})`;
+}
+
+export function clearSubscriptions() {
+    els.subList.innerHTML = "";
+    updateSubCount(0);
+}
+
+// --- KV STORE LISTS ---
+export function renderKvBuckets(buckets) {
+    els.kvBucketSelect.innerHTML = '<option value="">-- Select a Bucket --</option>';
+    buckets.sort().forEach(b => {
+      const opt = document.createElement("option");
+      opt.value = b;
+      opt.innerText = b;
+      els.kvBucketSelect.appendChild(opt);
+    });
+}
+
+export function addKvKey(key, onSelect) {
+    if (document.getElementById(`kv-key-${key}`)) return;
+    const div = document.createElement("div");
+    div.className = "kv-key";
+    div.id = `kv-key-${key}`;
+    div.innerText = key;
+    div.onclick = () => onSelect(key, div);
+    els.kvKeyList.appendChild(div);
+}
+
+export function removeKvKey(key) {
+    const el = document.getElementById(`kv-key-${key}`);
+    if(el) el.remove();
+}
+
+export function highlightKvKey(key, uiEl) {
+    document.querySelectorAll(".kv-key").forEach(e => e.classList.remove("active"));
+    if (uiEl) {
+        uiEl.classList.add("active");
+    } else {
+        const existing = document.getElementById(`kv-key-${key}`);
+        if(existing) existing.classList.add("active");
+    }
+}
+
+export function renderKvHistory(hist, onSelect) {
+    els.kvHistoryList.innerHTML = "";
+    if(hist.length === 0) {
+        els.kvHistoryList.innerHTML = "No history found.";
+        return;
+    }
+    hist.forEach(h => {
+        const row = document.createElement("div");
+        row.className = "kv-history-row";
+        
+        // Use Flexbox: Left side (Rev + Badge), Right side (Date)
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
+        row.style.gap = "10px";
+        
+        const isDelete = h.operation === "DEL" || h.operation === "PURGE";
+        
+        // Format date slightly shorter for mobile
+        const dateStr = new Date(h.created).toLocaleString(undefined, { 
+            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+        });
+
+        row.innerHTML = `
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="color:var(--accent); white-space:nowrap;">Rev ${h.revision}</span> 
+                <span class="badge" style="font-size:0.7em">${h.operation}</span>
+            </div>
+            <div style="color:#666; font-size:0.75em; text-align:right;">${dateStr}</div>
+        `;
+        
+        row.title = isDelete ? "Deleted" : (typeof h.value === 'string' ? h.value : JSON.stringify(h.value));
+        row.onclick = () => onSelect(h);
+
+        els.kvHistoryList.appendChild(row);
+    });
+}
+
+// --- STREAM LISTS ---
+export function renderStreamList(list, onSelect) {
+    els.streamList.innerHTML = '';
+    if(list.length === 0) { 
+        els.streamList.innerHTML = '<div class="kv-empty">No Streams Found</div>'; 
+        return; 
+    }
+    list.forEach(s => {
+        const div = document.createElement("div");
+        div.className = "kv-key"; 
+        div.innerText = s.config.name;
+        div.onclick = () => onSelect(s.config.name, div);
+        els.streamList.appendChild(div);
+    });
+}
+
+export function highlightStream(uiEl) {
+    Array.from(els.streamList.children).forEach(e => e.classList.remove("active"));
+    if(uiEl) uiEl.classList.add("active");
+}
+
+export function renderStreamConsumers(consumers) {
+    els.consumerList.innerHTML = '';
+    if (consumers.length === 0) { 
+        els.consumerList.innerHTML = '<div class="kv-empty">No Consumers</div>'; 
+        return; 
+    }
+    consumers.forEach(c => {
+        const div = document.createElement("div");
+        div.style.borderBottom = "1px solid #222";
+        div.style.padding = "6px 8px";
+        div.style.fontSize = "0.8rem";
+        div.style.display = "flex";
+        div.style.justifyContent = "space-between";
+        div.style.alignItems = "center";
+        const isDurable = !!c.config.durable_name;
+        const nameHtml = isDurable 
+            ? `<span style="color:var(--accent); font-weight:bold;">${utils.escapeHtml(c.name)}</span>` 
+            : `<span style="color:#888;">${utils.escapeHtml(c.name)}</span> <span class="badge" style="font-size:0.6em">Ephemeral</span>`;
+        
+        div.innerHTML = `
+            <div>${nameHtml}</div>
+            <div style="font-family:var(--mono); font-size:0.75rem; color:#aaa;">
+                Pending: <span style="color:${(c.num_pending||0) > 0 ? 'var(--warn)' : '#666'}">${c.num_pending||0}</span> | 
+                Waiting: ${c.num_waiting||0}
+            </div>
+        `;
+        els.consumerList.appendChild(div);
+    });
+}
+
+export function renderStreamMessages(msgs) {
+    els.streamMsgContainer.innerHTML = '';
+    if(msgs.length === 0) { 
+        els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found in range</div>'; 
+        return; 
+    }
+    
+    msgs.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "stream-msg-entry"; 
+        div.style.borderBottom = "1px solid #333";
+        div.style.padding = "8px";
+        div.style.fontSize = "0.85rem";
+        div.style.fontFamily = "var(--mono)";
+        
+        let content = utils.escapeHtml(m.data);
+        try {
+             const json = JSON.parse(m.data);
+             content = utils.syntaxHighlight(json);
+        } catch(e) {}
+
+        const msgId = `stream-msg-${m.seq}-${Date.now()}`; 
+
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; color:var(--accent); margin-bottom:4px;">
+               <span>#${m.seq}</span>
+               <span style="color:#666;">${new Date(m.time).toLocaleString()}</span>
+            </div>
+            <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${utils.escapeHtml(m.subject)}</div>
+            <div style="position:relative;">
+                <button class="copy-btn" style="position:absolute; top:0; right:0;" onclick="window.copyToClipboard('${msgId}')">Copy JSON</button>
+                <pre id="${msgId}" style="margin:0; font-size:0.8em; color:#aaa; padding-top:24px;">${content}</pre>
+            </div>
+        `;
+        els.streamMsgContainer.appendChild(div);
+    });
+}
+
 // --- DATA MODEL (LOG HISTORY) ---
 const logHistory = [];
 const MAX_LOG_HISTORY = 1000; 
 
-// Helper to safely determine if we should store as Object or String
 function tryParsePayload(rawData) {
     if (typeof rawData !== 'string') return rawData;
     const trimmed = rawData.trim();
@@ -89,7 +286,7 @@ export function filterList(inputElement, containerElement, childSelector = "div"
 let isPaused = false;
 let msgBuffer = [];
 let renderLoopId = null;
-const MAX_PRETTY_SIZE = 20000; // 20KB limit for pretty printing in UI
+const MAX_PRETTY_SIZE = 20000; 
 
 export function toggleLogPause() {
   isPaused = !isPaused;
@@ -102,7 +299,6 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
   const div = document.createElement("div");
   div.className = "msg-entry";
   
-  // Check filter
   const filterText = els.logFilter.value.toLowerCase();
   const fullText = (subject + data).toLowerCase();
   if (filterText && !fullText.includes(filterText)) {
@@ -110,16 +306,11 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
   }
 
   let content = utils.escapeHtml(data);
-  
-  // Optimization: Don't try to pretty print massive payloads for the DOM
   if (data.length < MAX_PRETTY_SIZE) {
     try {
       const obj = JSON.parse(data);
-      // Use syntax highlighter. This returns HTML, so we trust it.
       content = utils.syntaxHighlight(obj); 
-    } catch (e) {
-      // If not JSON, we use the escaped data above
-    }
+    } catch (e) {}
   } else {
     content = utils.escapeHtml(data.substring(0, MAX_PRETTY_SIZE)) + `\n... [Truncated ${utils.formatBytes(data.length)}]`;
   }
@@ -154,32 +345,16 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
 function flushBuffer() {
   if (msgBuffer.length > 0) {
     const fragment = document.createDocumentFragment();
-    // Process a batch (e.g. 50 messages) to keep UI responsive
     const batch = msgBuffer.splice(0, 50);
-    
-    // --- REVERSE ORDER LOGIC ---
-    // batch is [Oldest, ..., Newest] within this tick.
-    // We want to display Newest at the TOP.
-    // So we iterate the batch backwards, add to fragment, then Prepend fragment.
     for (let i = batch.length - 1; i >= 0; i--) {
         const { subject, data, isRpc, headers } = batch[i];
         const div = createMessageDiv(subject, data, isRpc, headers);
         fragment.appendChild(div);
     }
-
     const container = els.messages;
-    
-    // If user is at the top (scroll=0), we keep them at the top to see new messages.
     const isAtTop = container.scrollTop === 0;
-    
-    // Insert Newest Messages at the TOP
     container.prepend(fragment);
-
-    if (isAtTop) {
-      container.scrollTop = 0;
-    }
-
-    // Prune from the BOTTOM (Oldest messages)
+    if (isAtTop) container.scrollTop = 0;
     while (els.messages.children.length > 200) {
       els.messages.removeChild(els.messages.lastChild);
     }
@@ -193,9 +368,7 @@ function flushBuffer() {
 }
 
 export function startRenderLoop() {
-    if (!renderLoopId) {
-        flushBuffer();
-    }
+    if (!renderLoopId) flushBuffer();
 }
 
 export function stopRenderLoop() {
@@ -262,8 +435,7 @@ export function setConnectionState(state) {
     els.statusText.style.color = "var(--muted)";
     els.statusDot.className = "status-dot";
     els.rttLabel.style.opacity = 0;
-    els.subList.innerHTML = "";
-    els.subCount.innerText = "(0)";
+    clearSubscriptions();
   }
 }
 
