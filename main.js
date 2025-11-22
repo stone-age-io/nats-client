@@ -294,10 +294,11 @@ async function selectKeyWrapper(key, uiEl) {
         const row = document.createElement("div");
         row.style.borderBottom = "1px solid #333";
         row.style.padding = "4px";
+        // UPDATED: toLocaleString() instead of toLocaleTimeString()
         row.innerHTML = `
             <span style="color:var(--accent)">Rev ${h.revision}</span> 
             <span class="badge" style="font-size:0.7em">${h.operation}</span>
-            <span style="float:right; color:#666;">${h.created.toLocaleTimeString()}</span>
+            <span style="float:right; color:#666;">${h.created.toLocaleString()}</span>
         `;
         row.title = h.value; 
         els.kvHistoryList.appendChild(row);
@@ -413,6 +414,18 @@ async function selectStreamWrapper(name, uiEl) {
     els.streamDetailView.style.display = "block";
   } catch (e) { ui.showToast(`Error loading stream info: ${e.message}`, "error"); }
 }
+
+// STREAM MESSAGE CLEAR
+els.btnStreamClearMsgs.addEventListener("click", () => {
+    els.streamMsgContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>`;
+    els.streamMsgFilter.value = "";
+});
+
+// STREAM MESSAGE FILTER
+els.streamMsgFilter.addEventListener("keyup", () => {
+    ui.filterList(els.streamMsgFilter, els.streamMsgContainer, ".stream-msg-entry");
+});
+
 els.btnStreamViewMsgs.addEventListener("click", async () => {
     if(!currentStream) return;
     const start = parseInt(els.msgStartSeq.value) || 0;
@@ -427,22 +440,39 @@ els.btnStreamViewMsgs.addEventListener("click", async () => {
         if(msgs.length === 0) { els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found in range</div>'; return; }
         msgs.forEach(m => {
             const div = document.createElement("div");
+            div.className = "stream-msg-entry"; // Added for filtering
             div.style.borderBottom = "1px solid #333";
             div.style.padding = "8px";
             div.style.fontSize = "0.85rem";
             div.style.fontFamily = "var(--mono)";
-            let content = m.data;
-            try { content = JSON.stringify(JSON.parse(m.data), null, 2); } catch(e){}
+            
+            let content = utils.escapeHtml(m.data);
+            // Try syntax highlight
+            try {
+                 const json = JSON.parse(m.data);
+                 content = utils.syntaxHighlight(json);
+            } catch(e) {}
+
+            const msgId = `stream-msg-${m.seq}-${Date.now()}`; // Unique ID for copy
+
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; color:var(--accent); margin-bottom:4px;">
                    <span>#${m.seq}</span>
-                   <span style="color:#666;">${new Date(m.time).toLocaleTimeString()}</span>
+                   <!-- UPDATED: toLocaleString() instead of toLocaleTimeString() -->
+                   <span style="color:#666;">${new Date(m.time).toLocaleString()}</span>
                 </div>
-                <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${m.subject}</div>
-                <pre style="margin:0; font-size:0.8em; color:#aaa;">${content}</pre>
+                <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${utils.escapeHtml(m.subject)}</div>
+                <div style="position:relative;">
+                    <button class="copy-btn" style="position:absolute; top:0; right:0;" onclick="window.copyToClipboard('${msgId}')">Copy JSON</button>
+                    <pre id="${msgId}" style="margin:0; font-size:0.8em; color:#aaa; padding-top:24px;">${content}</pre>
+                </div>
             `;
             els.streamMsgContainer.appendChild(div);
         });
+        // Re-apply filter if one exists
+        if(els.streamMsgFilter.value) {
+             ui.filterList(els.streamMsgFilter, els.streamMsgContainer, ".stream-msg-entry");
+        }
     } catch(e) { els.streamMsgContainer.innerHTML = `<div class="kv-empty" style="color:var(--danger)">Error: ${e.message}</div>`; } 
     finally { els.btnStreamViewMsgs.disabled = false; }
 });

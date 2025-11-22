@@ -122,7 +122,10 @@
 
         <div class="box box-grow">
           <div class="box-header">
-            <h3 style="border:none; padding:0;">Message Log</h3>
+            <div style="display:flex; align-items:baseline; gap:10px;">
+                <h3 style="border:none; padding:0;">Message Log</h3>
+                <span class="sort-indicator" title="Newest messages appear at the top">⬇ Newest Top</span>
+            </div>
             <div style="display:flex; gap: 10px; align-items: center;">
               <input type="text" id="logFilter" class="filter-input" placeholder="Filter logs..." autocorrect="off" autocapitalize="off" spellcheck="false" />
               <button id="btnDownloadLogs" class="sm-btn" title="Download Logs as JSON">⬇</button>
@@ -251,8 +254,10 @@
                         <span>-</span>
                         <input type="number" id="msgEndSeq" placeholder="End" class="sm-input" style="width:80px; margin-bottom:0;">
                         <button id="btnStreamViewMsgs" class="sm-btn">Load</button>
+                        <button id="btnStreamClearMsgs" class="sm-btn">Clear</button>
                     </div>
                 </div>
+                <input type="text" id="streamMsgFilter" class="filter-input" placeholder="Filter loaded messages..." style="width:100%; margin-bottom:5px;" autocorrect="off" autocapitalize="off" spellcheck="false">
                 <div id="streamMsgContainer" class="scroll-container" style="background:#0d1117; border:1px solid var(--border); flex-grow:1;">
                     <div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>
                 </div>

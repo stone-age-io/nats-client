@@ -109,15 +109,19 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
     div.style.display = "none";
   }
 
-  let content = data;
+  let content = utils.escapeHtml(data);
+  
   // Optimization: Don't try to pretty print massive payloads for the DOM
   if (data.length < MAX_PRETTY_SIZE) {
     try {
       const obj = JSON.parse(data);
-      content = JSON.stringify(obj, null, 2); 
-    } catch (e) {}
+      // Use syntax highlighter. This returns HTML, so we trust it.
+      content = utils.syntaxHighlight(obj); 
+    } catch (e) {
+      // If not JSON, we use the escaped data above
+    }
   } else {
-    content = data.substring(0, MAX_PRETTY_SIZE) + `\n... [Truncated ${utils.formatBytes(data.length)}]`;
+    content = utils.escapeHtml(data.substring(0, MAX_PRETTY_SIZE)) + `\n... [Truncated ${utils.formatBytes(data.length)}]`;
   }
 
   const time = new Date().toLocaleTimeString();
@@ -130,7 +134,7 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
     const headerList = [];
     for (const [key, value] of msgHeaders) headerList.push(`${key}: ${value}`);
     if (headerList.length > 0) {
-      headerHtml = `<div style="margin-top:4px;"><span class="badge badge-hdr">HEAD</span> <span style="color:#888; font-size:0.8em">${headerList.join(", ")}</span></div>`;
+      headerHtml = `<div style="margin-top:4px;"><span class="badge badge-hdr">HEAD</span> <span style="color:#888; font-size:0.8em">${utils.escapeHtml(headerList.join(", "))}</span></div>`;
     }
   }
 
@@ -138,7 +142,7 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
     <div class="msg-meta">
       <span class="badge ${badgeClass}">${badgeText}</span>
       <span>${time}</span>
-      <span style="color:#ddd; font-weight:bold;">${subject}</span>
+      <span style="color:#ddd; font-weight:bold;">${utils.escapeHtml(subject)}</span>
       <button class="copy-btn" onclick="window.copyToClipboard('${msgId}')">Copy JSON</button>
     </div>
     ${headerHtml}
