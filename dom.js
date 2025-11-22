@@ -65,6 +65,8 @@ export const els = {
   kvKeyList: document.getElementById("kvKeyList"),
   kvKeyInput: document.getElementById("kvKeyInput"),
   kvValueInput: document.getElementById("kvValueInput"),
+  kvValueHighlighter: document.getElementById("kvValueHighlighter"), // NEW
+  btnKvToggleMode: document.getElementById("btnKvToggleMode"),       // NEW
   kvHistoryList: document.getElementById("kvHistoryList"),
   btnKvCopy: document.getElementById("btnKvCopy"),
   btnKvGet: document.getElementById("btnKvGet"),
@@ -106,7 +108,7 @@ export const els = {
   msgStartSeq: document.getElementById("msgStartSeq"),
   msgEndSeq: document.getElementById("msgEndSeq"),
   btnStreamViewMsgs: document.getElementById("btnStreamViewMsgs"),
-  btnStreamClearMsgs: document.getElementById("btnStreamClearMsgs"), // NEW
-  streamMsgFilter: document.getElementById("streamMsgFilter"),       // NEW
+  btnStreamClearMsgs: document.getElementById("btnStreamClearMsgs"),
+  streamMsgFilter: document.getElementById("streamMsgFilter"),
   streamMsgContainer: document.getElementById("streamMsgContainer"),
 };

@@ -267,6 +267,35 @@ els.kvBucketSelect.addEventListener("change", async () => {
     });
   } catch (e) { ui.setKvStatus(e.message, true); }
 });
+
+// --- KV VIEW MODE LOGIC ---
+let isKvEditMode = false;
+
+function setKvEditMode(isEdit) {
+    isKvEditMode = isEdit;
+    if (isKvEditMode) {
+        els.kvValueInput.style.display = "block";
+        els.kvValueHighlighter.style.display = "none";
+        els.btnKvToggleMode.innerText = "👁 View";
+        els.kvValueInput.focus();
+    } else {
+        els.kvValueInput.style.display = "none";
+        els.kvValueHighlighter.style.display = "block";
+        els.btnKvToggleMode.innerText = "✎ Edit";
+        // Update highlighter from current text val
+        try {
+            const json = JSON.parse(els.kvValueInput.value);
+            els.kvValueHighlighter.innerHTML = utils.syntaxHighlight(json);
+        } catch(e) {
+            els.kvValueHighlighter.innerText = els.kvValueInput.value;
+        }
+    }
+}
+
+els.btnKvToggleMode.addEventListener("click", () => {
+    setKvEditMode(!isKvEditMode);
+});
+
 async function selectKeyWrapper(key, uiEl) {
   document.querySelectorAll(".kv-key").forEach(e => e.classList.remove("active"));
   if (uiEl) uiEl.classList.add("active");
@@ -276,15 +305,22 @@ async function selectKeyWrapper(key, uiEl) {
   }
   els.kvKeyInput.value = key;
   els.kvValueInput.value = "Loading...";
+  els.kvValueHighlighter.innerText = "Loading...";
   els.kvHistoryList.innerHTML = "Loading history...";
+  
   try {
     const res = await nats.getKvValue(key);
     if (res) {
       els.kvValueInput.value = res.value;
       utils.beautify(els.kvValueInput);
+      
+      // Default to View Mode for cleaner reading
+      setKvEditMode(false);
+
       ui.setKvStatus(`Loaded '${key}' (Rev: ${res.revision})`);
     } else {
       els.kvValueInput.value = "";
+      els.kvValueHighlighter.innerText = "";
       ui.setKvStatus("Key not found", true);
     }
     const hist = await nats.getKvHistory(key);
@@ -294,7 +330,6 @@ async function selectKeyWrapper(key, uiEl) {
         const row = document.createElement("div");
         row.style.borderBottom = "1px solid #333";
         row.style.padding = "4px";
-        // UPDATED: toLocaleString() instead of toLocaleTimeString()
         row.innerHTML = `
             <span style="color:var(--accent)">Rev ${h.revision}</span> 
             <span class="badge" style="font-size:0.7em">${h.operation}</span>
@@ -305,6 +340,7 @@ async function selectKeyWrapper(key, uiEl) {
     });
   } catch (e) { 
       els.kvValueInput.value = ""; 
+      els.kvValueHighlighter.innerText = "";
       ui.setKvStatus(e.message, true); 
   }
 }
@@ -319,6 +355,7 @@ els.btnKvCopy.addEventListener("click", () => {
 });
 els.btnKvPut.addEventListener("click", async () => {
   const key = els.kvKeyInput.value.trim();
+  // Always read from Textarea for saves
   const val = els.kvValueInput.value;
   if (!key) return;
   try {
@@ -335,6 +372,7 @@ els.btnKvDelete.addEventListener("click", async () => {
     await nats.deleteKvValue(key);
     ui.setKvStatus(`Deleted '${key}'`);
     els.kvValueInput.value = "";
+    els.kvValueHighlighter.innerText = "";
     els.kvHistoryList.innerHTML = "Key deleted.";
     ui.showToast("Key Deleted", "info");
   } catch (e) { ui.setKvStatus(e.message, true); ui.showToast(e.message, "error"); }
@@ -458,7 +496,6 @@ els.btnStreamViewMsgs.addEventListener("click", async () => {
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; color:var(--accent); margin-bottom:4px;">
                    <span>#${m.seq}</span>
-                   <!-- UPDATED: toLocaleString() instead of toLocaleTimeString() -->
                    <span style="color:#666;">${new Date(m.time).toLocaleString()}</span>
                 </div>
                 <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${utils.escapeHtml(m.subject)}</div>
