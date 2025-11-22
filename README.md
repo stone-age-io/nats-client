@@ -1,7 +1,3 @@
-Here is the fully updated `README.md` reflecting the current, robust state of the application.
-
----
-
 # NATS Web Client 🪨
 
 A lightweight, dependency-light web client for [NATS](https://nats.io/). Built with **Vanilla JavaScript**, **Vite**, and standard CSS.
