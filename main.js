@@ -36,16 +36,30 @@ const DEFAULT_RPC_TIMEOUT_MS = 2000;
 
 const appState = {
   // Config Modal Management
-  activeConfigAction: null, // Function to call when config modal saved
+  // Stores the callback to execute when user clicks Save in the config modal
+  // This allows one modal to handle creating/editing both Streams and KV Buckets
+  activeConfigAction: null,
   
   // Stream Management
-  currentStream: null, // Name of selected stream (string)
+  // Name of the currently selected stream (string) or null if none selected
+  currentStream: null,
   
-  // KV Store Management  
-  kvKeys: new Set(), // Set of key names in currently-watched bucket
-  kvEditMode: false, // true = editing value, false = viewing value
+  // KV Store Management
+  // Set of key names in the currently watched bucket
+  // Used to prevent duplicate key entries in the UI
+  kvKeys: new Set(),
+  
+  // KV value edit mode flag
+  // true = textarea is visible for editing
+  // false = pre element is visible with syntax highlighting
+  kvEditMode: false,
+  
+  // Name of the currently selected KV bucket (string) or null if none selected
+  // Preserved when switching tabs so user maintains their working context
+  currentKvBucket: null,
   
   // Current KV Watcher
+  // AsyncIterable that streams key change events from the NATS server
   // Important: Must stop this before opening new bucket to prevent memory leaks
   currentKvWatcher: null,
 };
@@ -103,6 +117,7 @@ function refreshHistoryUi() {
 
 /**
  * Handle URL parameters for deep linking
+ * Supports auto-connection with pre-filled credentials
  */
 function handleUrlParameters() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -136,6 +151,11 @@ async function handleConnect() {
     try {
       await nats.disconnect();
       ui.setConnectionState('disconnected');
+      
+      // Clear KV bucket selection on disconnect
+      // This ensures fresh state when reconnecting to potentially different server
+      appState.currentKvBucket = null;
+      
       ui.showToast("Disconnected", "info");
     } catch (err) {
       console.error("Error during disconnect:", err);
@@ -229,8 +249,12 @@ els.btnCloseModal.addEventListener("click", handleCloseModal);
 
 /**
  * Open config modal for creating/editing streams or KV buckets
- * @param {string} title - Modal title
- * @param {object} templateJson - Default JSON config
+ * 
+ * This modal is reused for all entity types (Streams, KV Buckets)
+ * The action callback determines what happens when user clicks Save
+ * 
+ * @param {string} title - Modal title (e.g. "Create Stream", "Edit KV Bucket")
+ * @param {object} templateJson - Default JSON config to show in textarea
  * @param {function} actionCallback - Async function to call on save
  */
 function openConfigModal(title, templateJson, actionCallback) {
@@ -499,11 +523,29 @@ async function handleKvEdit() {
     }
 }
 
+/**
+ * Load list of KV buckets and restore previous bucket selection if it still exists
+ * Called when switching to KV tab or clicking Refresh button
+ */
 async function loadKvBucketsWrapper() {
   try {
     const list = await nats.getKvBuckets();
     ui.renderKvBuckets(list);
     ui.setKvStatus(`Loaded ${list.length} buckets.`);
+    
+    // Restore previous bucket selection if it still exists
+    // This maintains user's working context when switching between tabs
+    if (appState.currentKvBucket && list.includes(appState.currentKvBucket)) {
+      els.kvBucketSelect.value = appState.currentKvBucket;
+      // Don't call handleKvBucketChange - watcher is already running
+      // Keys are still being updated in background, just show status
+      ui.setKvStatus(`Watching ${appState.currentKvBucket}...`);
+    } else if (appState.currentKvBucket) {
+      // Bucket was deleted while user was on another tab
+      appState.currentKvBucket = null;
+      cleanupKvUi();
+      ui.setKvStatus(`Previous bucket no longer exists`, true);
+    }
   } catch (e) {
     console.error("Load KV buckets error:", e);
     ui.setKvStatus("Error loading buckets", true); 
@@ -511,8 +553,18 @@ async function loadKvBucketsWrapper() {
   }
 }
 
+/**
+ * Handle KV bucket selection change
+ * Opens the bucket, starts watching for key changes, and displays keys
+ */
 async function handleKvBucketChange() {
   const bucket = els.kvBucketSelect.value;
+  
+  // Store current bucket selection in app state
+  // This preserves context when switching tabs
+  appState.currentKvBucket = bucket;
+  
+  // Clear UI state
   els.kvKeyList.innerHTML = '';
   appState.kvKeys.clear();
   
@@ -522,7 +574,11 @@ async function handleKvBucketChange() {
     appState.currentKvWatcher = null;
   }
   
-  if (!bucket) return;
+  if (!bucket) {
+    // User explicitly selected "-- Select a Bucket --"
+    cleanupKvUi();
+    return;
+  }
   
   try {
     await nats.openKvBucket(bucket);
@@ -549,7 +605,22 @@ async function handleKvBucketChange() {
 }
 
 /**
+ * Clean up KV UI without stopping the watcher
+ * Used when user explicitly deselects bucket or bucket no longer exists
+ */
+function cleanupKvUi() {
+  els.kvKeyList.innerHTML = '<div class="kv-empty">Select a bucket to view keys</div>';
+  els.kvKeyInput.value = '';
+  els.kvValueInput.value = '';
+  els.kvValueHighlighter.innerText = '';
+  els.kvHistoryList.innerHTML = 'Select a key to view history';
+  appState.kvKeys.clear();
+}
+
+/**
  * Toggle between view mode and edit mode for KV values
+ * View mode shows syntax-highlighted JSON in a <pre> element
+ * Edit mode shows raw text in a <textarea> for editing
  */
 function setKvEditMode(isEdit) {
     appState.kvEditMode = isEdit;
@@ -578,6 +649,7 @@ function setKvEditMode(isEdit) {
 
 /**
  * Load a KV key's current value and history
+ * Shows the current value (HEAD) and lists all historical revisions
  */
 async function selectKeyWrapper(key, uiEl) {
   ui.highlightKvKey(key, uiEl);
