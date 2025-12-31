@@ -1,10 +1,11 @@
 // ============================================================================
-// NATS CLIENT WRAPPER
+// NATS CLIENT WRAPPER - MIGRATED TO @nats-io/nats-core
 // ============================================================================
 // Pure NATS API wrapper with no UI dependencies
 // All UI updates happen via callbacks passed in by caller
 
-import { connect, StringCodec, credsAuthenticator, headers } from "nats.ws";
+import { wsconnect, credsAuthenticator, headers } from "@nats-io/nats-core";
+import { jetstreamManager } from "@nats-io/jetstream";
 import { Kvm } from "@nats-io/kv";
 
 // ============================================================================
@@ -24,7 +25,10 @@ let kv = null;
 let jsm = null;
 let activeKvWatcher = null; 
 
-const sc = StringCodec();
+// Text encoder/decoder for message payloads (replaces StringCodec)
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
 const subscriptions = new Map();
 let subCounter = 0;
 let statsInterval = null;
@@ -54,7 +58,7 @@ export async function connectToNats(url, authOptions, onStatusChange, onStats) {
       if (jwtIndex > 0) rawText = rawText.substring(jwtIndex);
       else if (jwtIndex === -1) throw new Error("Invalid .creds file: JWT section not found");
       rawText = rawText.replace(/\r\n/g, "\n");
-      opts.authenticator = credsAuthenticator(new TextEncoder().encode(rawText));
+      opts.authenticator = credsAuthenticator(encoder.encode(rawText));
     } else if (authOptions.token) {
       opts.token = authOptions.token;
     } else if (authOptions.user) {
@@ -62,8 +66,8 @@ export async function connectToNats(url, authOptions, onStatusChange, onStats) {
       opts.pass = authOptions.pass;
     }
     
-    // Attempt connection
-    nc = await connect(opts);
+    // Attempt connection using wsconnect (replaces connect from nats.ws)
+    nc = await wsconnect(opts);
     
     // Only setup monitoring if connection succeeded
     setupConnectionMonitoring(onStatusChange);
@@ -216,7 +220,7 @@ export function subscribe(subject, onMessage) {
       try {
         for await (const m of sub) {
           try { 
-            const data = sc.decode(m.data);
+            const data = decoder.decode(m.data);
             if (onMessage) onMessage(m.subject, data, false, m.headers);
           } catch (e) { 
             // Binary data
@@ -252,7 +256,8 @@ export function publish(subject, payload, headersJson) {
   
   try {
     const h = parseHeaders(headersJson);
-    nc.publish(subject, sc.encode(payload), { headers: h });
+    // Encode string payload to bytes
+    nc.publish(subject, encoder.encode(payload), { headers: h });
   } catch (error) {
     throw new Error(`Failed to publish: ${error.message}`);
   }
@@ -263,10 +268,10 @@ export async function request(subject, payload, headersJson, timeout) {
   
   try {
     const h = parseHeaders(headersJson);
-    const msg = await nc.request(subject, sc.encode(payload), { timeout, headers: h });
+    const msg = await nc.request(subject, encoder.encode(payload), { timeout, headers: h });
     let data;
     try { 
-      data = sc.decode(msg.data); 
+      data = decoder.decode(msg.data); 
     } catch (e) { 
       data = `[Binary Response: ${msg.data.length} bytes]`; 
     }
@@ -414,7 +419,7 @@ export async function getKvValue(key) {
   try {
     const entry = await kv.get(key);
     if (!entry) return null;
-    return { value: sc.decode(entry.value), revision: entry.revision };
+    return { value: decoder.decode(entry.value), revision: entry.revision };
   } catch (error) {
     throw new Error(`Failed to get key '${key}': ${error.message}`);
   }
@@ -430,7 +435,7 @@ export async function getKvHistory(key) {
         hist.push({
             revision: e.revision, 
             operation: e.operation,
-            value: e.value ? sc.decode(e.value) : null, 
+            value: e.value ? decoder.decode(e.value) : null, 
             created: e.created
         });
     }
@@ -444,7 +449,7 @@ export async function putKvValue(key, value) {
   if (!kv) throw new Error("No Bucket Open");
   
   try {
-    await kv.put(key, sc.encode(value));
+    await kv.put(key, encoder.encode(value));
   } catch (error) {
     throw new Error(`Failed to put key '${key}': ${error.message}`);
   }
@@ -466,7 +471,8 @@ export async function deleteKvValue(key) {
 
 async function getJsm() { 
   if (!nc || nc.isClosed()) throw new Error("Not Connected"); 
-  if (!jsm) jsm = await nc.jetstreamManager(); 
+  // Use jetstreamManager function instead of nc.jetstreamManager()
+  if (!jsm) jsm = await jetstreamManager(nc); 
   return jsm; 
 }
 
@@ -562,7 +568,7 @@ export async function getStreamMessageRange(name, startSeq, endSeq) {
             .then(sm => ({ 
               seq: sm.seq, 
               subject: sm.subject, 
-              data: sc.decode(sm.data), 
+              data: decoder.decode(sm.data), 
               time: sm.time 
             }))
             .catch(() => null) // Message might not exist (gaps in sequence)
