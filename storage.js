@@ -13,14 +13,40 @@ const KEYS = {
   CONNECTION_URL: "nats_url",
   SUBJECT_HISTORY: "nats_subject_history",
   URL_HISTORY: "nats_url_history",
+  PROFILES: "nats_profiles",
+  TEMPLATES: "nats_msg_templates",
+  SAVED_SUBS: "nats_saved_subs",
 };
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
-const MAX_SUBJECT_HISTORY = 10;
-const MAX_URL_HISTORY = 5;
+const MAX_SUBJECT_HISTORY = 50;
+const MAX_URL_HISTORY = 10;
+const MAX_SAVED_SUBS_PER_SERVER = 30;
+
+// ============================================================================
+// GENERIC JSON HELPERS
+// ============================================================================
+
+function loadJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    console.error(`Failed to load ${key}:`, e);
+    return fallback;
+  }
+}
+
+function saveJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Failed to save ${key}:`, e);
+  }
+}
 
 // ============================================================================
 // CONNECTION URL
@@ -102,6 +128,89 @@ export function addUrlToHistory(url) {
     localStorage.setItem(KEYS.URL_HISTORY, JSON.stringify(trimmed));
   } catch (e) {
     console.error("Failed to save URL history:", e);
+  }
+}
+
+// ============================================================================
+// CONNECTION PROFILES
+// ============================================================================
+// A profile is { name, url, user, pass, token, credsText }
+// Credentials are stored in plaintext localStorage - only saved when the user
+// explicitly checks "Remember credentials"
+
+export function getProfiles() {
+  return loadJson(KEYS.PROFILES, []);
+}
+
+export function saveProfile(profile) {
+  if (!profile || !profile.name) return;
+  const profiles = getProfiles().filter(p => p.name !== profile.name);
+  profiles.push(profile);
+  profiles.sort((a, b) => a.name.localeCompare(b.name));
+  saveJson(KEYS.PROFILES, profiles);
+}
+
+export function getProfile(name) {
+  return getProfiles().find(p => p.name === name) || null;
+}
+
+export function deleteProfile(name) {
+  saveJson(KEYS.PROFILES, getProfiles().filter(p => p.name !== name));
+}
+
+// ============================================================================
+// MESSAGE TEMPLATES
+// ============================================================================
+// A template is { name, subject, payload, headers }
+
+export function getTemplates() {
+  return loadJson(KEYS.TEMPLATES, []);
+}
+
+export function saveTemplate(template) {
+  if (!template || !template.name) return;
+  const templates = getTemplates().filter(t => t.name !== template.name);
+  templates.push(template);
+  templates.sort((a, b) => a.name.localeCompare(b.name));
+  saveJson(KEYS.TEMPLATES, templates);
+}
+
+export function getTemplate(name) {
+  return getTemplates().find(t => t.name === name) || null;
+}
+
+export function deleteTemplate(name) {
+  saveJson(KEYS.TEMPLATES, getTemplates().filter(t => t.name !== name));
+}
+
+// ============================================================================
+// SAVED SUBSCRIPTIONS (per server URL)
+// ============================================================================
+// Map of { url: [subjects] } - restored automatically on connect
+
+export function getSavedSubscriptions(url) {
+  const all = loadJson(KEYS.SAVED_SUBS, {});
+  return all[url] || [];
+}
+
+export function addSavedSubscription(url, subject) {
+  if (!url || !subject) return;
+  const all = loadJson(KEYS.SAVED_SUBS, {});
+  const subs = all[url] || [];
+  if (!subs.includes(subject)) {
+    subs.push(subject);
+    all[url] = subs.slice(-MAX_SAVED_SUBS_PER_SERVER);
+    saveJson(KEYS.SAVED_SUBS, all);
+  }
+}
+
+export function removeSavedSubscription(url, subject) {
+  if (!url) return;
+  const all = loadJson(KEYS.SAVED_SUBS, {});
+  if (all[url]) {
+    all[url] = all[url].filter(s => s !== subject);
+    if (all[url].length === 0) delete all[url];
+    saveJson(KEYS.SAVED_SUBS, all);
   }
 }
 

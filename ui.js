@@ -96,7 +96,27 @@ export function showToast(msg, type = "info") {
 export function renderHistoryDatalist(elementId, items) {
     const el = document.getElementById(elementId);
     if(!el) return;
-    el.innerHTML = items.map(s => `<option value="${s}">`).join("");
+    el.innerHTML = items.map(s => `<option value="${utils.escapeHtml(s)}">`).join("");
+}
+
+// ============================================================================
+// NAMED OPTION DROPDOWNS (Profiles / Templates)
+// ============================================================================
+
+/**
+ * Re-render a select's options from a list of named items,
+ * preserving the placeholder option and reselecting the previous value
+ */
+export function renderNamedOptions(selectEl, items, placeholder) {
+    const prev = selectEl.value;
+    selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+    items.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item.name;
+        opt.innerText = item.name;
+        selectEl.appendChild(opt);
+    });
+    if (items.some(i => i.name === prev)) selectEl.value = prev;
 }
 
 // ============================================================================
@@ -264,59 +284,108 @@ export function renderStreamConsumers(consumers) {
         div.style.display = "flex";
         div.style.justifyContent = "space-between";
         div.style.alignItems = "center";
-        
+        div.style.gap = "8px";
+
         const isDurable = !!c.config.durable_name;
-        const nameHtml = isDurable 
-            ? `<span style="color:var(--accent); font-weight:bold;">${utils.escapeHtml(c.name)}</span>` 
+        const nameHtml = isDurable
+            ? `<span style="color:var(--accent); font-weight:bold;">${utils.escapeHtml(c.name)}</span>`
             : `<span style="color:#888;">${utils.escapeHtml(c.name)}</span> <span class="badge" style="font-size:0.6em">Ephemeral</span>`;
-        
+
+        const safeName = utils.escapeHtml(c.name);
         div.innerHTML = `
-            <div>${nameHtml}</div>
-            <div style="font-family:var(--mono); font-size:0.75rem; color:#aaa;">
-                Pending: <span style="color:${(c.num_pending||0) > 0 ? 'var(--warn)' : '#666'}">${c.num_pending||0}</span> | 
-                Waiting: ${c.num_waiting||0}
+            <div style="min-width:0; overflow:hidden; text-overflow:ellipsis;">${nameHtml}</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+                <div style="font-family:var(--mono); font-size:0.75rem; color:#aaa; white-space:nowrap;">
+                    Pending: <span style="color:${(c.num_pending||0) > 0 ? 'var(--warn)' : '#666'}">${c.num_pending||0}</span> |
+                    Waiting: ${c.num_waiting||0} |
+                    Ack: ${c.num_ack_pending||0}
+                </div>
+                <button class="sm-btn consumer-edit" data-consumer="${safeName}" title="View / Edit Config">Edit</button>
+                <button class="sm-btn danger consumer-delete" data-consumer="${safeName}" title="Delete Consumer">✕</button>
             </div>
         `;
         els.consumerList.appendChild(div);
     });
 }
 
+// Counter for unique stream message DOM ids (tail can deliver the same seq
+// again after a restart, so seq alone is not unique enough)
+let streamMsgCounter = 0;
+
+// Cap on rendered tail entries so a busy stream doesn't grow the DOM forever
+const MAX_TAIL_MESSAGES = 200;
+
+/**
+ * Build a single stream message entry element
+ * Shared by range loading and live tail
+ */
+function createStreamMsgDiv(m) {
+    const div = document.createElement("div");
+    div.className = "stream-msg-entry";
+    div.style.borderBottom = "1px solid #333";
+    div.style.padding = "8px";
+    div.style.fontSize = "0.85rem";
+    div.style.fontFamily = "var(--mono)";
+
+    let content = utils.escapeHtml(m.data);
+    try {
+         const json = JSON.parse(m.data);
+         content = utils.syntaxHighlight(json);
+    } catch(e) {}
+
+    const msgId = `stream-msg-${streamMsgCounter++}`;
+
+    let headerHtml = "";
+    if (m.headers) {
+        const pairs = Object.entries(m.headers).map(([k, v]) => `${k}: ${v}`);
+        headerHtml = `<div style="margin-bottom:4px;">
+            <span class="badge badge-hdr">HEAD</span>
+            <span style="color:#888; font-size:0.8em">${utils.escapeHtml(pairs.join(", "))}</span>
+        </div>`;
+    }
+
+    div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; color:var(--accent); margin-bottom:4px;">
+           <span>#${m.seq}</span>
+           <span style="color:#666;">${new Date(m.time).toLocaleString()}</span>
+        </div>
+        <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${utils.escapeHtml(m.subject)}</div>
+        ${headerHtml}
+        <div style="position:relative;">
+            <button class="copy-btn" style="position:absolute; top:0; right:0;" data-msg-id="${msgId}">Copy JSON</button>
+            <pre id="${msgId}" style="margin:0; font-size:0.8em; color:#aaa; padding-top:24px;">${content}</pre>
+        </div>
+    `;
+    return div;
+}
+
 export function renderStreamMessages(msgs) {
     els.streamMsgContainer.innerHTML = '';
-    if(msgs.length === 0) { 
-        els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found in range</div>'; 
-        return; 
+    if(msgs.length === 0) {
+        els.streamMsgContainer.innerHTML = '<div class="kv-empty">No messages found in range</div>';
+        return;
     }
-    
-    msgs.forEach(m => {
-        const div = document.createElement("div");
-        div.className = "stream-msg-entry"; 
-        div.style.borderBottom = "1px solid #333";
-        div.style.padding = "8px";
-        div.style.fontSize = "0.85rem";
-        div.style.fontFamily = "var(--mono)";
-        
-        let content = utils.escapeHtml(m.data);
-        try {
-             const json = JSON.parse(m.data);
-             content = utils.syntaxHighlight(json);
-        } catch(e) {}
 
-        const msgId = `stream-msg-${m.seq}-${Date.now()}`; 
+    msgs.forEach(m => els.streamMsgContainer.appendChild(createStreamMsgDiv(m)));
+}
 
-        div.innerHTML = `
-            <div style="display:flex; justify-content:space-between; color:var(--accent); margin-bottom:4px;">
-               <span>#${m.seq}</span>
-               <span style="color:#666;">${new Date(m.time).toLocaleString()}</span>
-            </div>
-            <div style="color:#ddd; font-weight:bold; margin-bottom:4px;">${utils.escapeHtml(m.subject)}</div>
-            <div style="position:relative;">
-                <button class="copy-btn" style="position:absolute; top:0; right:0;" data-msg-id="${msgId}">Copy JSON</button>
-                <pre id="${msgId}" style="margin:0; font-size:0.8em; color:#aaa; padding-top:24px;">${content}</pre>
-            </div>
-        `;
-        els.streamMsgContainer.appendChild(div);
-    });
+/**
+ * Prepend a single live-tail message (newest at top), pruning old entries
+ */
+export function appendStreamTailMessage(m) {
+    // Remove any placeholder / previously loaded state marker
+    const empty = els.streamMsgContainer.querySelector(".kv-empty, .tail-placeholder");
+    if (empty) empty.remove();
+
+    els.streamMsgContainer.prepend(createStreamMsgDiv(m));
+
+    while (els.streamMsgContainer.children.length > MAX_TAIL_MESSAGES) {
+        els.streamMsgContainer.lastChild.remove();
+    }
+}
+
+export function showTailPlaceholder() {
+    els.streamMsgContainer.innerHTML = '<div class="kv-empty tail-placeholder">Tailing... waiting for new messages</div>';
 }
 
 // ============================================================================

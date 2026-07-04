@@ -55,9 +55,17 @@
       
       <div class="box">
         <div class="box-header"><h3>Connection</h3></div>
+
+        <label>Profile</label>
+        <div style="display:flex; gap:5px; margin-bottom:10px;">
+          <select id="profileSelect" style="flex:1; margin-bottom:0;"><option value="">-- No Profile --</option></select>
+          <button id="btnProfileSave" class="sm-btn" title="Save current settings as a named profile">Save</button>
+          <button id="btnProfileDelete" class="sm-btn" title="Delete selected profile">✕</button>
+        </div>
+
         <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222" placeholder="ws://..." autocorrect="off" autocapitalize="off" spellcheck="false" />
         <datalist id="urlHistory"></datalist>
-        
+
         <div style="margin-bottom: 10px; border-top: 1px solid #333; padding-top:10px;">
           <label>Authentication (Optional)</label>
           <input type="text" id="authUser" placeholder="Username" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom: 5px;" />
@@ -65,8 +73,13 @@
           <input type="password" id="authToken" placeholder="Token (overrides User/Pass)" />
           <div style="margin-top:5px; font-size:0.75rem; color:#666;">OR upload .creds file:</div>
         </div>
-        
+
         <input type="file" id="credsFile" accept=".creds,.txt" />
+        <div id="credsHint" style="display:none; font-size:0.75rem; color:var(--accent); margin-bottom:8px;">🔑 Using credentials from profile</div>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer; margin-bottom:10px;">
+          <input type="checkbox" id="saveCredsChk" style="width:auto; margin:0;" />
+          Remember credentials in profile (stored unencrypted)
+        </label>
         <button id="btnConnect" class="primary" style="width:100%">Connect</button>
       </div>
 
@@ -97,7 +110,14 @@
       <!-- MESSAGING PANEL -->
       <div id="panelMsg" class="panel-content">
         <div class="box">
-          <div class="box-header"><h3>Publish / Request</h3></div>
+          <div class="box-header">
+            <h3>Publish / Request</h3>
+            <div style="display:flex; gap:5px; align-items:center;">
+              <select id="templateSelect" class="sm-input" style="width:160px; text-align:left;"><option value="">-- Templates --</option></select>
+              <button id="btnTemplateSave" class="sm-btn" title="Save current subject/payload/headers as a template">Save</button>
+              <button id="btnTemplateDelete" class="sm-btn" title="Delete selected template">✕</button>
+            </div>
+          </div>
           <div style="display: flex; gap: 10px;" class="pub-row">
             <div style="flex: 1;">
               <input type="text" id="pubSubject" list="subHistory" placeholder="Subject" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:8px;" />
@@ -146,6 +166,7 @@
             <div style="display:flex; gap:5px;">
               <button id="btnKvEdit" class="sm-btn" title="Edit Bucket Config">Edit</button>
               <button id="btnKvCreate" class="sm-btn" title="Create Bucket">+</button>
+              <button id="btnKvDeleteBucket" class="sm-btn danger" title="Delete Bucket (and all data)">Del</button>
               <button id="btnKvRefresh" class="sm-btn">Refresh</button>
             </div>
           </div>
@@ -190,7 +211,8 @@
               </div>
               <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
                  <span id="kvStatus" style="margin-right:auto; color:var(--accent); align-self:center; font-size:0.8rem;"></span>
-                 <button id="btnKvDelete" class="danger">Delete Key</button>
+                 <button id="btnKvPurge" class="danger" title="Remove key AND its revision history">Purge Key</button>
+                 <button id="btnKvDelete" class="danger" title="Delete key (history is kept)">Delete Key</button>
                  <button id="btnKvPut" class="primary">Put / Update</button>
               </div>
             </div>
@@ -247,22 +269,27 @@
               <div style="margin-top:10px; border-bottom:1px solid #333; padding-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                     <label>Consumers</label>
-                    <button id="btnLoadConsumers" class="sm-btn">Load Consumers</button>
+                    <div style="display:flex; gap:5px;">
+                      <button id="btnConsumerCreate" class="sm-btn" title="Create Consumer">+</button>
+                      <button id="btnLoadConsumers" class="sm-btn">Refresh</button>
+                    </div>
                 </div>
                 <div id="consumerList" class="scroll-container" style="height:120px; min-height:120px; background:#0d1117; border:1px solid var(--border);">
-                    <div style="padding:10px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view consumers</div>
+                    <div style="padding:10px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Loading...</div>
                 </div>
               </div>
 
               <!-- Stream Messages Section -->
               <div style="flex-grow:1; display:flex; flex-direction:column; margin-top:10px; min-height:200px;">
                 <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:5px; gap:5px;">
-                    <label style="margin:0;">Message Range (Max 50)</label>
-                    <div style="display:flex; gap:5px; align-items:center;">
+                    <label style="margin:0;">Messages (Max 200)</label>
+                    <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
+                        <input type="text" id="msgSubjectFilter" placeholder="Subject filter (e.g. orders.>)" class="sm-input" style="width:180px; margin-bottom:0; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
                         <input type="number" id="msgStartSeq" placeholder="Start" class="sm-input" style="width:80px; margin-bottom:0;">
                         <span>-</span>
                         <input type="number" id="msgEndSeq" placeholder="End" class="sm-input" style="width:80px; margin-bottom:0;">
                         <button id="btnStreamViewMsgs" class="sm-btn">Load</button>
+                        <button id="btnStreamTail" class="sm-btn" title="Live-follow new messages on this stream">▶ Tail</button>
                         <button id="btnStreamClearMsgs" class="sm-btn">Clear</button>
                     </div>
                 </div>

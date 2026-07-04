@@ -10,6 +10,11 @@ export const els = {
   authPass: document.getElementById("authPass"),
   authToken: document.getElementById("authToken"),
   btnConnect: document.getElementById("btnConnect"),
+  profileSelect: document.getElementById("profileSelect"),
+  btnProfileSave: document.getElementById("btnProfileSave"),
+  btnProfileDelete: document.getElementById("btnProfileDelete"),
+  saveCredsChk: document.getElementById("saveCredsChk"),
+  credsHint: document.getElementById("credsHint"),
   statusText: document.getElementById("statusText"),
   statusDot: document.getElementById("statusDot"),
   rttLabel: document.getElementById("rttLabel"),
@@ -43,6 +48,9 @@ export const els = {
   panelStream: document.getElementById("panelStream"),
 
   // Messaging
+  templateSelect: document.getElementById("templateSelect"),
+  btnTemplateSave: document.getElementById("btnTemplateSave"),
+  btnTemplateDelete: document.getElementById("btnTemplateDelete"),
   pubSubject: document.getElementById("pubSubject"),
   pubPayload: document.getElementById("pubPayload"),
   btnHeaderToggle: document.getElementById("btnHeaderToggle"),
@@ -72,6 +80,8 @@ export const els = {
   btnKvGet: document.getElementById("btnKvGet"),
   btnKvPut: document.getElementById("btnKvPut"),
   btnKvDelete: document.getElementById("btnKvDelete"),
+  btnKvPurge: document.getElementById("btnKvPurge"),
+  btnKvDeleteBucket: document.getElementById("btnKvDeleteBucket"),
   kvStatus: document.getElementById("kvStatus"),
   kvFilter: document.getElementById("kvFilter"),
   
@@ -102,12 +112,15 @@ export const els = {
   
   // Consumers
   btnLoadConsumers: document.getElementById("btnLoadConsumers"),
+  btnConsumerCreate: document.getElementById("btnConsumerCreate"),
   consumerList: document.getElementById("consumerList"),
 
   // Messages
   msgStartSeq: document.getElementById("msgStartSeq"),
   msgEndSeq: document.getElementById("msgEndSeq"),
+  msgSubjectFilter: document.getElementById("msgSubjectFilter"),
   btnStreamViewMsgs: document.getElementById("btnStreamViewMsgs"),
+  btnStreamTail: document.getElementById("btnStreamTail"),
   btnStreamClearMsgs: document.getElementById("btnStreamClearMsgs"),
   streamMsgFilter: document.getElementById("streamMsgFilter"),
   streamMsgContainer: document.getElementById("streamMsgContainer"),

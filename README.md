@@ -9,6 +9,7 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 ### Connection & Authentication
 *   **WebSocket Support:** Connects directly to NATS servers via `ws://` or `wss://`.
 *   **Authentication:** Supports **User/Password**, **Token**, and **.creds (JWT/NKEY)** files.
+*   **Named Profiles:** Save connection settings (URL + auth) as named profiles ("dev", "staging", "prod") for one-click switching. Credentials are only stored when you explicitly opt in.
 *   **History:** Remembers previous connection URLs for quick switching.
 *   **Stats:** Real-time RTT/Latency monitoring.
 
@@ -16,15 +17,18 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 *   **Publish:** Send messages with payloads and Headers (JSON). `Ctrl + Enter` to send.
 *   **Subscribe:** Real-time message logging with JSON auto-formatting and syntax highlighting.
 *   **Request/Reply:** Perform RPC calls with configurable timeouts.
-*   **QoL:** 
+*   **Message Templates:** Save subject/payload/headers combos as named templates - like a Postman collection for NATS.
+*   **QoL:**
+    *   **Persistent Subscriptions:** Subscriptions are remembered per server and automatically restored on reconnect.
     *   **Click-to-Fill:** Click a subscription subject to immediately target it for publishing.
     *   **Local History:** Remembers recently used subjects.
     *   **Pause/Resume:** Pause the log flow to inspect high-traffic subjects.
+    *   **Binary-safe:** Non-UTF-8 payloads are detected and shown as a hex preview.
 
 ### JetStream KV Store
-*   **Management:** Create, Edit, and Delete KV Buckets using raw JSON configuration.
+*   **Management:** Create, Edit, and Delete KV Buckets using raw JSON configuration (bucket deletion requires typing the bucket name).
 *   **Real-time Watch:** The key list updates instantly when keys are added/removed by other clients.
-*   **CRUD:** Get, Put, and Delete keys.
+*   **CRUD:** Get, Put, Delete, and **Purge** keys (purge also removes revision history).
 *   **History:** View **Revision History** for any key to see how values changed over time.
 *   **UX:** One-click Copy for values, JSON validation.
 
@@ -32,8 +36,9 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 *   **Admin:** List, Create, Edit, and Delete JetStream Streams.
 *   **Configuration:** Full control over Retention, Storage (File/Memory), Subjects, and Limits via JSON templates.
 *   **Inspection:**
-    *   **Consumer List:** View all consumers on a stream, identifying Durable vs Ephemeral and monitoring **Pending/Lag** counts.
-    *   **Message Inspector:** Fetch raw messages from the stream by specifying a **Sequence Range** (e.g., "Load messages 100-150").
+    *   **Consumer Management:** Consumers load automatically per stream. View/edit configs, create new consumers, and delete them - with Pending/Waiting/Ack-pending counts.
+    *   **Message Inspector:** Fetch messages by **Sequence Range** with an optional **Subject Filter** (wildcards supported), fetched as a single batch. Headers are displayed.
+    *   **Live Tail:** Follow new messages on a stream in real time, optionally filtered by subject.
 *   **Actions:** Purge stream messages.
 
 ## Prerequisites

@@ -19,9 +19,8 @@ import * as storage from "./storage.js";
 // ============================================================================
 
 // Maximum messages to fetch from stream in one request
-// NATS server performance limit - larger batches cause timeouts
-// Tested with NATS 2.9+ on standard hardware
-const MAX_STREAM_MSG_FETCH = 50;
+// Fetched as a single ordered-consumer batch; bounded to keep the DOM snappy
+const MAX_STREAM_MSG_FETCH = 200;
 
 // Default RPC timeout in milliseconds
 // 2 seconds is reasonable for most NATS deployments (local/LAN)
@@ -62,6 +61,16 @@ const appState = {
   // AsyncIterable that streams key change events from the NATS server
   // Important: Must stop this before opening new bucket to prevent memory leaks
   currentKvWatcher: null,
+
+  // Creds file text loaded from the selected profile (null if none)
+  // Used at connect time when no file is picked in the file input
+  profileCredsText: null,
+
+  // URL we are currently connected to - used to key saved subscriptions
+  connectedUrl: null,
+
+  // Whether stream live-tail is running
+  isTailing: false,
 };
 
 // ============================================================================
@@ -76,12 +85,15 @@ function initializeApp() {
   // Setup event delegation for copy buttons and unsubscribe buttons
   ui.initializeEventDelegation();
   setupSubscriptionEventDelegation();
-  
+  setupConsumerEventDelegation();
+
   // Restore history and last URL
   refreshHistoryUi();
+  refreshProfileUi();
+  refreshTemplateUi();
   const savedUrl = storage.getLastUrl();
   if (savedUrl) els.url.value = savedUrl;
-  
+
   // Handle URL parameters (for deep linking)
   handleUrlParameters();
 }
@@ -131,7 +143,13 @@ function handleUrlParameters() {
   if (paramToken) els.authToken.value = paramToken;
   if (paramUser) els.authUser.value = paramUser;
   if (paramPass) els.authPass.value = paramPass;
-  
+
+  // Strip credentials from the address bar so they don't persist
+  // in browser history / bookmarks / screen shares
+  if (paramToken || paramUser || paramPass) {
+    history.replaceState(null, "", window.location.pathname);
+  }
+
   // Auto-connect if requested
   if (autoConnect) {
     setTimeout(() => handleConnect(), 100);
@@ -149,54 +167,73 @@ async function handleConnect() {
   // If already connected, disconnect
   if (nats.isConnected()) {
     try {
+      stopTailUi();
       await nats.disconnect();
       ui.setConnectionState('disconnected');
-      
+
       // Clear KV bucket selection on disconnect
       // This ensures fresh state when reconnecting to potentially different server
       appState.currentKvBucket = null;
-      
+      appState.currentKvWatcher = null;
+      appState.connectedUrl = null;
+      cleanupKvUi();
+
       ui.showToast("Disconnected", "info");
     } catch (err) {
       console.error("Error during disconnect:", err);
       ui.showToast(`Disconnect error: ${err.message}`, "error");
     }
-    return; 
+    return;
   }
 
   // Otherwise, connect
   const url = els.url.value.trim();
-  
+
   if (!url) {
     ui.showToast("Please enter a server URL", "error");
     return;
   }
-  
+
   try {
     // Save URL to storage and history
     storage.saveUrl(url);
     storage.addUrlToHistory(url);
     refreshHistoryUi();
-    
+
     els.statusText.innerText = "Connecting...";
     els.btnConnect.disabled = true;
-    
+
     // Gather authentication options
+    // A freshly picked .creds file wins over creds stored in the profile
+    let credsText = null;
+    if (els.creds.files.length > 0) {
+      credsText = await els.creds.files[0].text();
+    } else if (appState.profileCredsText) {
+      credsText = appState.profileCredsText;
+    }
+
     const authOptions = {
-        credsFile: els.creds.files.length > 0 ? els.creds.files[0] : null,
+        credsText,
         user: els.authUser.value.trim(),
         pass: els.authPass.value.trim(),
         token: els.authToken.value.trim()
     };
-    
+
     // Connect with callbacks for status and stats
     await nats.connectToNats(
-      url, 
-      authOptions, 
+      url,
+      authOptions,
       // Status change callback
       (status, err) => {
         ui.setConnectionState(status);
         if (status === 'disconnected') {
+            // Connection lost - clear per-connection state so the UI
+            // doesn't act on stale handles after a manual reconnect
+            appState.currentKvBucket = null;
+            appState.currentKvWatcher = null;
+            appState.connectedUrl = null;
+            cleanupKvUi();
+            stopTailUi();
             if (err) ui.showToast(`Connection Lost: ${err.message}`, "error");
         } else if (status === 'connected') {
             ui.showToast("Reconnected", "success");
@@ -209,8 +246,12 @@ async function handleConnect() {
       }
     );
 
+    appState.connectedUrl = url;
     ui.setConnectionState('connected');
     ui.showToast("Connected to NATS", "success");
+
+    // Restore saved subscriptions for this server
+    restoreSubscriptions(url);
 
     // Load data for active tab
     if (els.tabKv.classList.contains('active')) {
@@ -242,6 +283,92 @@ function handleCloseModal() {
 els.btnConnect.addEventListener("click", handleConnect);
 els.btnInfo.addEventListener("click", handleShowServerInfo);
 els.btnCloseModal.addEventListener("click", handleCloseModal);
+
+// ============================================================================
+// CONNECTION PROFILE HANDLERS
+// ============================================================================
+
+function refreshProfileUi() {
+  ui.renderNamedOptions(els.profileSelect, storage.getProfiles(), "-- No Profile --");
+}
+
+/**
+ * Fill the connection form from the selected profile
+ */
+function handleProfileChange() {
+  const profile = storage.getProfile(els.profileSelect.value);
+  appState.profileCredsText = null;
+  els.credsHint.style.display = "none";
+
+  if (!profile) return;
+
+  els.url.value = profile.url || "";
+  els.authUser.value = profile.user || "";
+  els.authPass.value = profile.pass || "";
+  els.authToken.value = profile.token || "";
+  els.creds.value = "";
+  els.saveCredsChk.checked = !!(profile.pass || profile.token || profile.credsText);
+
+  if (profile.credsText) {
+    appState.profileCredsText = profile.credsText;
+    els.credsHint.style.display = "block";
+  }
+}
+
+async function handleProfileSave() {
+  const name = prompt("Profile name:", els.profileSelect.value || "");
+  if (!name || !name.trim()) return;
+
+  const saveCreds = els.saveCredsChk.checked;
+  const profile = {
+    name: name.trim(),
+    url: els.url.value.trim(),
+    user: els.authUser.value.trim(),
+    pass: saveCreds ? els.authPass.value : "",
+    token: saveCreds ? els.authToken.value.trim() : "",
+    credsText: null,
+  };
+
+  if (saveCreds) {
+    if (els.creds.files.length > 0) {
+      profile.credsText = await els.creds.files[0].text();
+    } else if (appState.profileCredsText) {
+      // Keep creds already loaded from the profile being edited
+      profile.credsText = appState.profileCredsText;
+    }
+  }
+
+  storage.saveProfile(profile);
+  refreshProfileUi();
+  els.profileSelect.value = profile.name;
+  ui.showToast(`Profile '${profile.name}' saved${saveCreds ? " (with credentials)" : ""}`, "success");
+}
+
+function handleProfileDelete() {
+  const name = els.profileSelect.value;
+  if (!name) {
+    ui.showToast("Select a profile first", "info");
+    return;
+  }
+  if (!confirm(`Delete profile '${name}'?`)) return;
+
+  storage.deleteProfile(name);
+  appState.profileCredsText = null;
+  els.credsHint.style.display = "none";
+  refreshProfileUi();
+  els.profileSelect.value = "";
+  ui.showToast(`Profile '${name}' deleted`, "info");
+}
+
+els.profileSelect.addEventListener("change", handleProfileChange);
+els.btnProfileSave.addEventListener("click", handleProfileSave);
+els.btnProfileDelete.addEventListener("click", handleProfileDelete);
+
+// Picking a real .creds file overrides profile creds - hide the hint
+els.creds.addEventListener("change", () => {
+  if (els.creds.files.length > 0) els.credsHint.style.display = "none";
+  else if (appState.profileCredsText) els.credsHint.style.display = "block";
+});
 
 // ============================================================================
 // CONFIG MODAL HANDLERS
@@ -327,34 +454,65 @@ els.tabStream.onclick = handleTabStream;
 // SUBSCRIPTION HANDLERS
 // ============================================================================
 
+/**
+ * Subscribe to a subject and add it to the UI
+ * @param {string} subj - Subject to subscribe to
+ * @param {boolean} quiet - Suppress the success toast (used during bulk restore)
+ */
+function subscribeTo(subj, quiet = false) {
+  const { id, subject, size } = nats.subscribe(subj, (subject, data, isRpc, headers) => {
+    ui.renderMessage(subject, data, isRpc, headers);
+  });
+
+  ui.addSubscription(id, subject);
+  ui.updateSubCount(size);
+  if (!quiet) ui.showToast(`Subscribed to ${subject}`, "success");
+}
+
+/**
+ * Re-subscribe to subjects saved for this server URL
+ */
+function restoreSubscriptions(url) {
+  const saved = storage.getSavedSubscriptions(url);
+  if (saved.length === 0) return;
+
+  let count = 0;
+  for (const subj of saved) {
+    try {
+      subscribeTo(subj, true);
+      count++;
+    } catch (err) {
+      console.error(`Failed to restore subscription '${subj}':`, err);
+    }
+  }
+  if (count > 0) ui.showToast(`Restored ${count} subscription${count > 1 ? "s" : ""}`, "info");
+}
+
 function handleSubscribe() {
   const subj = els.subSubject.value.trim();
   if (!subj) return;
-  
+
   try {
     storage.addSubjectToHistory(subj);
     refreshHistoryUi();
-    
-    // Subscribe with message callback
-    const { id, subject, size } = nats.subscribe(subj, (subject, data, isRpc, headers) => {
-      ui.renderMessage(subject, data, isRpc, headers);
-    });
-    
-    ui.addSubscription(id, subject);
-    ui.updateSubCount(size);
+
+    subscribeTo(subj);
+    if (appState.connectedUrl) storage.addSavedSubscription(appState.connectedUrl, subj);
     els.subSubject.value = "";
-    ui.showToast(`Subscribed to ${subject}`, "success");
   } catch (err) {
     console.error("Subscribe error:", err);
-    ui.showToast(err.message, "error"); 
+    ui.showToast(err.message, "error");
   }
 }
 
 function handleUnsubscribe(id) {
   try {
-    const size = nats.unsubscribe(id);
+    const { size, subject } = nats.unsubscribe(id);
     ui.removeSubscription(id);
     ui.updateSubCount(size);
+    if (subject && appState.connectedUrl) {
+      storage.removeSavedSubscription(appState.connectedUrl, subject);
+    }
   } catch (error) {
     console.error("Unsubscribe error:", error);
     ui.showToast(error.message, "error");
@@ -421,6 +579,64 @@ function handleHeaderToggle() {
   els.headerContainer.style.display = isHidden ? "block" : "none";
   els.btnHeaderToggle.innerText = isHidden ? "▼ Headers (Optional)" : "► Add Headers (Optional)";
 }
+
+// ============================================================================
+// MESSAGE TEMPLATE HANDLERS
+// ============================================================================
+// Saved subject/payload/headers combos - like Postman collections for NATS
+
+function refreshTemplateUi() {
+  ui.renderNamedOptions(els.templateSelect, storage.getTemplates(), "-- Templates --");
+}
+
+function handleTemplateChange() {
+  const template = storage.getTemplate(els.templateSelect.value);
+  if (!template) return;
+
+  els.pubSubject.value = template.subject || "";
+  els.pubPayload.value = template.payload || "";
+  els.pubHeaders.value = template.headers || "";
+
+  // Reveal the headers section if the template uses headers
+  if (template.headers && els.headerContainer.style.display === "none") {
+    handleHeaderToggle();
+  }
+  utils.validateJsonInput(els.pubPayload);
+  utils.validateJsonInput(els.pubHeaders);
+}
+
+function handleTemplateSave() {
+  const name = prompt("Template name:", els.templateSelect.value || els.pubSubject.value.trim());
+  if (!name || !name.trim()) return;
+
+  storage.saveTemplate({
+    name: name.trim(),
+    subject: els.pubSubject.value.trim(),
+    payload: els.pubPayload.value,
+    headers: els.pubHeaders.value.trim(),
+  });
+  refreshTemplateUi();
+  els.templateSelect.value = name.trim();
+  ui.showToast(`Template '${name.trim()}' saved`, "success");
+}
+
+function handleTemplateDelete() {
+  const name = els.templateSelect.value;
+  if (!name) {
+    ui.showToast("Select a template first", "info");
+    return;
+  }
+  if (!confirm(`Delete template '${name}'?`)) return;
+
+  storage.deleteTemplate(name);
+  refreshTemplateUi();
+  els.templateSelect.value = "";
+  ui.showToast(`Template '${name}' deleted`, "info");
+}
+
+els.templateSelect.addEventListener("change", handleTemplateChange);
+els.btnTemplateSave.addEventListener("click", handleTemplateSave);
+els.btnTemplateDelete.addEventListener("click", handleTemplateDelete);
 
 // Wire up publish/request events
 els.btnPub.addEventListener("click", handlePublish);
@@ -537,9 +753,14 @@ async function loadKvBucketsWrapper() {
     // This maintains user's working context when switching between tabs
     if (appState.currentKvBucket && list.includes(appState.currentKvBucket)) {
       els.kvBucketSelect.value = appState.currentKvBucket;
-      // Don't call handleKvBucketChange - watcher is already running
-      // Keys are still being updated in background, just show status
-      ui.setKvStatus(`Watching ${appState.currentKvBucket}...`);
+      if (appState.currentKvWatcher) {
+        // Watcher still running - keys are being updated in background
+        ui.setKvStatus(`Watching ${appState.currentKvBucket}...`);
+      } else {
+        // No live watcher (e.g. after a reconnect) - reopen the bucket
+        // so the kv handle and watch are fresh
+        await handleKvBucketChange();
+      }
     } else if (appState.currentKvBucket) {
       // Bucket was deleted while user was on another tab
       appState.currentKvBucket = null;
@@ -755,7 +976,7 @@ async function handleKvPut() {
 async function handleKvDelete() {
   const key = els.kvKeyInput.value.trim();
   if (!key || !confirm(`Delete '${key}'?`)) return;
-  
+
   try {
     await nats.deleteKvValue(key);
     ui.setKvStatus(`Deleted '${key}'`);
@@ -765,14 +986,66 @@ async function handleKvDelete() {
     ui.showToast("Key Deleted", "info");
   } catch (e) {
     console.error("KV delete error:", e);
-    ui.setKvStatus(e.message, true); 
-    ui.showToast(e.message, "error"); 
+    ui.setKvStatus(e.message, true);
+    ui.showToast(e.message, "error");
+  }
+}
+
+async function handleKvPurge() {
+  const key = els.kvKeyInput.value.trim();
+  if (!key || !confirm(`Purge '${key}'?\n\nThis removes the key AND all its revision history. Cannot be undone.`)) return;
+
+  try {
+    await nats.purgeKvValue(key);
+    ui.setKvStatus(`Purged '${key}'`);
+    els.kvValueInput.value = "";
+    els.kvValueHighlighter.innerText = "";
+    els.kvHistoryList.innerHTML = "Key purged.";
+    ui.showToast("Key Purged (history removed)", "info");
+  } catch (e) {
+    console.error("KV purge error:", e);
+    ui.setKvStatus(e.message, true);
+    ui.showToast(e.message, "error");
+  }
+}
+
+async function handleKvDeleteBucket() {
+  const bucket = els.kvBucketSelect.value;
+  if (!bucket) {
+    ui.showToast("Select a bucket first", "info");
+    return;
+  }
+
+  // Type-to-confirm: bucket deletion destroys all keys and history
+  const typed = prompt(`DELETE bucket '${bucket}' and ALL its data?\n\nType the bucket name to confirm:`);
+  if (typed === null) return;
+  if (typed.trim() !== bucket) {
+    ui.showToast("Bucket name did not match - nothing deleted", "info");
+    return;
+  }
+
+  try {
+    // Stop watching before destroying the underlying stream
+    if (appState.currentKvWatcher) {
+      appState.currentKvWatcher.stop();
+      appState.currentKvWatcher = null;
+    }
+    await nats.destroyKvBucket(bucket);
+    appState.currentKvBucket = null;
+    cleanupKvUi();
+    ui.showToast(`Bucket '${bucket}' deleted`, "success");
+    loadKvBucketsWrapper();
+  } catch (e) {
+    console.error("KV bucket delete error:", e);
+    ui.showToast(e.message, "error");
   }
 }
 
 // Wire up KV events
 els.btnKvCreate.addEventListener("click", handleKvCreate);
 els.btnKvEdit.addEventListener("click", handleKvEdit);
+els.btnKvDeleteBucket.addEventListener("click", handleKvDeleteBucket);
+els.btnKvPurge.addEventListener("click", handleKvPurge);
 els.btnKvRefresh.addEventListener("click", loadKvBucketsWrapper);
 els.kvBucketSelect.addEventListener("change", handleKvBucketChange);
 els.btnKvToggleMode.addEventListener("click", () => setKvEditMode(!appState.kvEditMode));
@@ -854,13 +1127,14 @@ async function loadStreamsWrapper() {
 }
 
 async function selectStreamWrapper(name, uiEl) {
+  stopTailUi();
   ui.highlightStream(uiEl);
   appState.currentStream = name;
   els.streamEmptyState.style.display = "none";
-  els.streamDetailView.style.display = "none"; 
+  els.streamDetailView.style.display = "none";
   els.streamMsgContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>`;
-  els.consumerList.innerHTML = `<div style="padding:10px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view consumers</div>`;
-  
+  els.consumerList.innerHTML = `<div class="kv-empty">Loading...</div>`;
+
   try {
     const info = await nats.getStreamInfo(name);
     const conf = info.config;
@@ -885,58 +1159,106 @@ async function selectStreamWrapper(name, uiEl) {
     if (start < first) start = first;
     els.msgEndSeq.value = last;
     els.msgStartSeq.value = start > 0 ? start : 0;
-    
+
     els.streamDetailView.style.display = "block";
+
+    // Consumers load automatically - no extra click needed
+    handleLoadConsumers();
   } catch (e) {
     console.error("Stream select error:", e);
-    ui.showToast(`Error loading stream info: ${e.message}`, "error"); 
+    ui.showToast(`Error loading stream info: ${e.message}`, "error");
   }
 }
 
 async function handleStreamViewMessages() {
     if(!appState.currentStream) return;
-    
+    stopTailUi();
+
     const start = parseInt(els.msgStartSeq.value) || 0;
     const end = parseInt(els.msgEndSeq.value) || 0;
-    
-    if(end < start) { 
-      ui.showToast("End Seq cannot be less than Start Seq", "error"); 
-      return; 
+    const subjectFilter = els.msgSubjectFilter.value.trim();
+
+    if(end < start) {
+      ui.showToast("End Seq cannot be less than Start Seq", "error");
+      return;
     }
-    if((end - start) > MAX_STREAM_MSG_FETCH) { 
-      ui.showToast(`Range cannot exceed ${MAX_STREAM_MSG_FETCH} messages`, "error"); 
-      return; 
-    }
-    
+
     els.btnStreamViewMsgs.disabled = true;
     els.streamMsgContainer.innerHTML = '<div class="kv-empty">Loading...</div>';
-    
+
     try {
-        const msgs = await nats.getStreamMessageRange(appState.currentStream, start, end);
+        const msgs = await nats.getStreamMessageRange(
+          appState.currentStream, start, end, subjectFilter, MAX_STREAM_MSG_FETCH
+        );
         ui.renderStreamMessages(msgs);
         if(els.streamMsgFilter.value) {
              ui.filterList(els.streamMsgFilter, els.streamMsgContainer, ".stream-msg-entry");
         }
     } catch(e) {
       console.error("Stream messages error:", e);
-      els.streamMsgContainer.innerHTML = `<div class="kv-empty" style="color:var(--danger)">Error: ${e.message}</div>`; 
+      els.streamMsgContainer.innerHTML = `<div class="kv-empty" style="color:var(--danger)">Error: ${e.message}</div>`;
       ui.showToast(e.message, "error");
-    } finally { 
-      els.btnStreamViewMsgs.disabled = false; 
+    } finally {
+      els.btnStreamViewMsgs.disabled = false;
+    }
+}
+
+/**
+ * Reset the tail button/state without touching the message container
+ * Safe to call whether or not a tail is running
+ */
+function stopTailUi() {
+    nats.stopStreamTail();
+    appState.isTailing = false;
+    els.btnStreamTail.innerText = "▶ Tail";
+    els.btnStreamTail.classList.remove("paused");
+}
+
+/**
+ * Toggle live-tailing of the selected stream
+ * New messages stream into the message container (newest at top)
+ */
+async function handleStreamTailToggle() {
+    if (!appState.currentStream) return;
+
+    if (appState.isTailing) {
+        stopTailUi();
+        ui.showToast("Tail stopped", "info");
+        return;
+    }
+
+    const subjectFilter = els.msgSubjectFilter.value.trim();
+
+    try {
+        await nats.startStreamTail(appState.currentStream, subjectFilter, (m) => {
+            ui.appendStreamTailMessage(m);
+            if (els.streamMsgFilter.value) {
+                ui.filterList(els.streamMsgFilter, els.streamMsgContainer, ".stream-msg-entry");
+            }
+        });
+        appState.isTailing = true;
+        els.btnStreamTail.innerText = "⏹ Stop";
+        els.btnStreamTail.classList.add("paused");
+        ui.showTailPlaceholder();
+        ui.showToast(`Tailing ${appState.currentStream}${subjectFilter ? ` (${subjectFilter})` : ""}...`, "success");
+    } catch (e) {
+        console.error("Stream tail error:", e);
+        ui.showToast(e.message, "error");
     }
 }
 
 function handleStreamClearMessages() {
+    stopTailUi();
     els.streamMsgContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>`;
     els.streamMsgFilter.value = "";
 }
 
 async function handleLoadConsumers() {
     if(!appState.currentStream) return;
-    
+
     els.btnLoadConsumers.disabled = true;
     els.consumerList.innerHTML = '<div class="kv-empty">Loading...</div>';
-    
+
     try {
         const consumers = await nats.getConsumers(appState.currentStream);
         ui.renderStreamConsumers(consumers);
@@ -944,9 +1266,98 @@ async function handleLoadConsumers() {
       console.error("Load consumers error:", e);
       els.consumerList.innerHTML = `<div class="kv-empty" style="color:var(--danger)">Error: ${e.message}</div>`;
       ui.showToast(e.message, "error");
-    } finally { 
-      els.btnLoadConsumers.disabled = false; 
+    } finally {
+      els.btnLoadConsumers.disabled = false;
     }
+}
+
+// ============================================================================
+// CONSUMER MANAGEMENT HANDLERS
+// ============================================================================
+
+async function handleConsumerCreate() {
+    if(!appState.currentStream) return;
+
+    const template = {
+      durable_name: "my-consumer",
+      description: "",
+      ack_policy: "explicit",
+      deliver_policy: "all",
+      filter_subject: "",
+      max_ack_pending: 1000,
+      max_deliver: -1,
+      ack_wait: 30000000000
+    };
+
+    openConfigModal(`Create Consumer on ${appState.currentStream}`, template, async (config) => {
+        try {
+            await nats.createConsumer(appState.currentStream, config);
+            ui.showToast(`Consumer ${config.durable_name || config.name} created`, "success");
+            closeConfigModal();
+            handleLoadConsumers();
+        } catch(e) {
+          console.error("Consumer create error:", e);
+          ui.showToast(e.message, "error");
+        }
+    });
+}
+
+async function handleConsumerEdit(consumerName) {
+    if(!appState.currentStream) return;
+
+    try {
+        const info = await nats.getConsumerInfo(appState.currentStream, consumerName);
+        const isDurable = !!info.config.durable_name;
+
+        openConfigModal(`Consumer: ${consumerName}`, info.config, async (config) => {
+            if (!isDurable) {
+                ui.showToast("Ephemeral consumers cannot be updated", "error");
+                return;
+            }
+            try {
+                await nats.updateConsumer(appState.currentStream, consumerName, config);
+                ui.showToast(`Consumer ${consumerName} updated`, "success");
+                closeConfigModal();
+                handleLoadConsumers();
+            } catch(e) {
+              console.error("Consumer update error:", e);
+              ui.showToast(e.message, "error");
+            }
+        });
+    } catch(e) {
+      console.error("Consumer info error:", e);
+      ui.showToast(e.message, "error");
+    }
+}
+
+async function handleConsumerDelete(consumerName) {
+    if(!appState.currentStream) return;
+    if(!confirm(`DELETE consumer '${consumerName}' from stream '${appState.currentStream}'?`)) return;
+
+    try {
+        await nats.deleteConsumer(appState.currentStream, consumerName);
+        ui.showToast(`Consumer '${consumerName}' deleted`, "success");
+        handleLoadConsumers();
+    } catch(e) {
+      console.error("Consumer delete error:", e);
+      ui.showToast(e.message, "error");
+    }
+}
+
+/**
+ * Event delegation for the dynamically rendered consumer rows
+ */
+function setupConsumerEventDelegation() {
+    els.consumerList.addEventListener("click", (e) => {
+        const name = e.target.dataset.consumer;
+        if (!name) return;
+
+        if (e.target.classList.contains("consumer-edit")) {
+            handleConsumerEdit(name);
+        } else if (e.target.classList.contains("consumer-delete")) {
+            handleConsumerDelete(name);
+        }
+    });
 }
 
 async function handleStreamPurge() {
@@ -966,6 +1377,7 @@ async function handleStreamDelete() {
     if(!appState.currentStream || !confirm(`DELETE stream '${appState.currentStream}'?`)) return;
     
     try {
+        stopTailUi();
         await nats.deleteStream(appState.currentStream);
         ui.showToast(`Stream '${appState.currentStream}' deleted`, "success");
         appState.currentStream = null;
@@ -983,8 +1395,10 @@ els.btnStreamCreate.addEventListener("click", handleStreamCreate);
 els.btnStreamEdit.addEventListener("click", handleStreamEdit);
 els.btnStreamRefresh.addEventListener("click", loadStreamsWrapper);
 els.btnStreamViewMsgs.addEventListener("click", handleStreamViewMessages);
+els.btnStreamTail.addEventListener("click", handleStreamTailToggle);
 els.btnStreamClearMsgs.addEventListener("click", handleStreamClearMessages);
 els.btnLoadConsumers.addEventListener("click", handleLoadConsumers);
+els.btnConsumerCreate.addEventListener("click", handleConsumerCreate);
 els.btnStreamPurge.addEventListener("click", handleStreamPurge);
 els.btnStreamDelete.addEventListener("click", handleStreamDelete);
 els.streamFilter.addEventListener("keyup", () => ui.filterList(els.streamFilter, els.streamList, ".kv-key"));

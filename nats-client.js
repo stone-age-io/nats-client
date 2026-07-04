@@ -5,7 +5,7 @@
 // All UI updates happen via callbacks passed in by caller
 
 import { wsconnect, credsAuthenticator, headers } from "@nats-io/nats-core";
-import { jetstreamManager } from "@nats-io/jetstream";
+import { jetstream, jetstreamManager, DeliverPolicy } from "@nats-io/jetstream";
 import { Kvm } from "@nats-io/kv";
 
 // ============================================================================
@@ -23,11 +23,39 @@ const STATS_POLL_INTERVAL_MS = 2000;
 let nc = null;
 let kv = null;
 let jsm = null;
-let activeKvWatcher = null; 
+let activeKvWatcher = null;
+let activeTail = null;
 
-// Text encoder/decoder for message payloads (replaces StringCodec)
+// Text encoder for message payloads (replaces StringCodec)
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+// Strict decoder throws on invalid UTF-8 so we can detect binary payloads
+// (the default decoder silently substitutes U+FFFD and never throws)
+const strictDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * Decode a payload, detecting binary data
+ * Returns the decoded string, or a hex preview for non-UTF-8 payloads
+ */
+function decodePayload(data) {
+  try {
+    return strictDecoder.decode(data);
+  } catch (e) {
+    const preview = Array.from(data.slice(0, 64))
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join(" ");
+    return `[Binary: ${data.length} bytes]\n${preview}${data.length > 64 ? " …" : ""}`;
+  }
+}
+
+/**
+ * Convert NATS MsgHdrs (or undefined) to a plain object for display
+ */
+function headersToObject(h) {
+  if (!h) return null;
+  const obj = {};
+  for (const [key, value] of h) obj[key] = value;
+  return Object.keys(obj).length ? obj : null;
+}
 
 const subscriptions = new Map();
 let subCounter = 0;
@@ -52,8 +80,9 @@ export async function connectToNats(url, authOptions, onStatusChange, onStats) {
   
   try {
     // Handle authentication
-    if (authOptions.credsFile) {
-      let rawText = await authOptions.credsFile.text();
+    // credsText is the raw text of a .creds file (from file upload or saved profile)
+    if (authOptions.credsText) {
+      let rawText = authOptions.credsText;
       const jwtIndex = rawText.indexOf("-----BEGIN NATS USER JWT-----");
       if (jwtIndex > 0) rawText = rawText.substring(jwtIndex);
       else if (jwtIndex === -1) throw new Error("Invalid .creds file: JWT section not found");
@@ -138,11 +167,14 @@ export async function disconnect() {
     }
     
     // Stop KV watcher
-    if (activeKvWatcher) { 
-      activeKvWatcher.stop(); 
-      activeKvWatcher = null; 
+    if (activeKvWatcher) {
+      activeKvWatcher.stop();
+      activeKvWatcher = null;
     }
-    
+
+    // Stop stream tail
+    stopStreamTail();
+
     // Close connection
     if (nc) { 
       await nc.close(); 
@@ -162,6 +194,7 @@ export async function disconnect() {
     jsm = null;
     statsInterval = null;
     activeKvWatcher = null;
+    activeTail = null;
     subscriptions.clear();
     subCounter = 0;
   }
@@ -219,13 +252,7 @@ export function subscribe(subject, onMessage) {
     (async () => {
       try {
         for await (const m of sub) {
-          try { 
-            const data = decoder.decode(m.data);
-            if (onMessage) onMessage(m.subject, data, false, m.headers);
-          } catch (e) { 
-            // Binary data
-            if (onMessage) onMessage(m.subject, `[Binary Data: ${m.data.length} bytes]`, false, m.headers);
-          }
+          if (onMessage) onMessage(m.subject, decodePayload(m.data), false, m.headers);
         }
       } catch (e) {
         console.error(`Subscription error for ${subject}:`, e);
@@ -240,15 +267,15 @@ export function subscribe(subject, onMessage) {
 
 export function unsubscribe(id) {
   const item = subscriptions.get(id);
-  if (item) { 
+  if (item) {
     try {
-      item.sub.unsubscribe(); 
+      item.sub.unsubscribe();
     } catch (e) {
       console.error("Error unsubscribing:", e);
     }
-    subscriptions.delete(id); 
+    subscriptions.delete(id);
   }
-  return subscriptions.size;
+  return { size: subscriptions.size, subject: item ? item.subject : null };
 }
 
 export function publish(subject, payload, headersJson) {
@@ -269,13 +296,7 @@ export async function request(subject, payload, headersJson, timeout) {
   try {
     const h = parseHeaders(headersJson);
     const msg = await nc.request(subject, encoder.encode(payload), { timeout, headers: h });
-    let data;
-    try { 
-      data = decoder.decode(msg.data); 
-    } catch (e) { 
-      data = `[Binary Response: ${msg.data.length} bytes]`; 
-    }
-    return { subject: msg.subject, data, headers: msg.headers };
+    return { subject: msg.subject, data: decodePayload(msg.data), headers: msg.headers };
   } catch (error) {
     if (error.message.includes("timeout")) {
       throw new Error(`Request timeout after ${timeout}ms. No responder available?`);
@@ -419,7 +440,7 @@ export async function getKvValue(key) {
   try {
     const entry = await kv.get(key);
     if (!entry) return null;
-    return { value: decoder.decode(entry.value), revision: entry.revision };
+    return { value: decodePayload(entry.value), revision: entry.revision };
   } catch (error) {
     throw new Error(`Failed to get key '${key}': ${error.message}`);
   }
@@ -433,9 +454,9 @@ export async function getKvHistory(key) {
     const iter = await kv.history({ key });
     for await (const e of iter) {
         hist.push({
-            revision: e.revision, 
+            revision: e.revision,
             operation: e.operation,
-            value: e.value ? decoder.decode(e.value) : null, 
+            value: e.value ? decodePayload(e.value) : null,
             created: e.created
         });
     }
@@ -455,13 +476,44 @@ export async function putKvValue(key, value) {
   }
 }
 
-export async function deleteKvValue(key) { 
+export async function deleteKvValue(key) {
   if (!kv) throw new Error("No Bucket Open");
-  
+
   try {
     await kv.delete(key);
   } catch (error) {
     throw new Error(`Failed to delete key '${key}': ${error.message}`);
+  }
+}
+
+/**
+ * Purge a key: removes the key AND all its revision history
+ * (delete only adds a tombstone; history remains)
+ */
+export async function purgeKvValue(key) {
+  if (!kv) throw new Error("No Bucket Open");
+
+  try {
+    await kv.purge(key);
+  } catch (error) {
+    throw new Error(`Failed to purge key '${key}': ${error.message}`);
+  }
+}
+
+/**
+ * Destroy an entire KV bucket and all its data
+ */
+export async function destroyKvBucket(bucketName) {
+  if (!nc || nc.isClosed()) throw new Error("Not Connected");
+
+  try {
+    const kvm = new Kvm(nc);
+    const target = await kvm.open(bucketName);
+    await target.destroy();
+    // If we destroyed the currently open bucket, drop the stale handle
+    if (kv && kv.bucket === bucketName) kv = null;
+  } catch (error) {
+    throw new Error(`Failed to delete bucket '${bucketName}': ${error.message}`);
   }
 }
 
@@ -548,36 +600,146 @@ export async function getConsumers(streamName) {
   }
 }
 
+export async function getConsumerInfo(streamName, consumerName) {
+  try {
+    const mgr = await getJsm();
+    return await mgr.consumers.info(streamName, consumerName);
+  } catch (error) {
+    throw new Error(`Failed to get consumer info: ${error.message}`);
+  }
+}
+
+export async function createConsumer(streamName, config) {
+  try {
+    const mgr = await getJsm();
+    await mgr.consumers.add(streamName, config);
+  } catch (error) {
+    if (error.message.includes("already exists")) {
+      throw new Error(`Consumer '${config.durable_name || config.name}' already exists`);
+    }
+    throw new Error(`Failed to create consumer: ${error.message}`);
+  }
+}
+
+export async function updateConsumer(streamName, durableName, config) {
+  try {
+    const mgr = await getJsm();
+    await mgr.consumers.update(streamName, durableName, config);
+  } catch (error) {
+    throw new Error(`Failed to update consumer: ${error.message}`);
+  }
+}
+
+export async function deleteConsumer(streamName, consumerName) {
+  try {
+    const mgr = await getJsm();
+    await mgr.consumers.delete(streamName, consumerName);
+  } catch (error) {
+    throw new Error(`Failed to delete consumer: ${error.message}`);
+  }
+}
+
 /**
- * Fetch messages from stream by sequence number range
+ * Fetch messages from a stream using an ephemeral ordered consumer
+ * One round-trip batch instead of one request per sequence number
+ *
  * @param {string} name - Stream name
  * @param {number} startSeq - Start sequence (inclusive)
  * @param {number} endSeq - End sequence (inclusive)
- * @returns {Array} - Array of message objects
+ * @param {string} subjectFilter - Optional subject filter (supports wildcards)
+ * @param {number} max - Maximum messages to return
+ * @returns {Array} - Array of message objects (newest first)
  */
-export async function getStreamMessageRange(name, startSeq, endSeq) {
+export async function getStreamMessageRange(name, startSeq, endSeq, subjectFilter, max) {
+  if (!nc || nc.isClosed()) throw new Error("Not Connected");
+  if (startSeq < 1) startSeq = 1;
+  if (endSeq < startSeq) return [];
+
+  let iter = null;
   try {
-    const mgr = await getJsm();
-    if(startSeq < 1) startSeq = 1;
-    if(endSeq < startSeq) return [];
-    
-    const promises = [];
-    for (let i = startSeq; i <= endSeq; i++) {
-        promises.push(
-            mgr.streams.getMessage(name, { seq: i })
-            .then(sm => ({ 
-              seq: sm.seq, 
-              subject: sm.subject, 
-              data: decoder.decode(sm.data), 
-              time: sm.time 
-            }))
-            .catch(() => null) // Message might not exist (gaps in sequence)
-        );
+    const js = jetstream(nc);
+    const opts = {
+      deliver_policy: DeliverPolicy.StartSequence,
+      opt_start_seq: startSeq,
+    };
+    if (subjectFilter) opts.filter_subjects = [subjectFilter];
+
+    const consumer = await js.consumers.get(name, opts);
+    const msgs = [];
+
+    // expires bounds the wait when the range/filter yields fewer messages
+    iter = await consumer.fetch({ max_messages: max, expires: 3000 });
+    for await (const m of iter) {
+      if (m.seq > endSeq) break;
+      msgs.push({
+        seq: m.seq,
+        subject: m.subject,
+        data: decodePayload(m.data),
+        time: m.time,
+        headers: headersToObject(m.headers),
+      });
+      if (msgs.length >= max) break;
     }
-    
-    const results = await Promise.all(promises);
-    return results.filter(m => m !== null).reverse();
+
+    return msgs.reverse();
   } catch (error) {
     throw new Error(`Failed to fetch messages: ${error.message}`);
+  } finally {
+    if (iter) { try { iter.stop(); } catch (e) { /* already done */ } }
   }
+}
+
+/**
+ * Start live-tailing a stream: new messages are delivered via callback
+ * Uses an ephemeral ordered consumer with deliver_policy "new"
+ *
+ * @param {string} name - Stream name
+ * @param {string} subjectFilter - Optional subject filter (supports wildcards)
+ * @param {function} onMsg - Callback receiving message objects
+ * @returns {object} - Handle with stop()
+ */
+export async function startStreamTail(name, subjectFilter, onMsg) {
+  if (!nc || nc.isClosed()) throw new Error("Not Connected");
+  stopStreamTail();
+
+  try {
+    const js = jetstream(nc);
+    const opts = { deliver_policy: DeliverPolicy.New };
+    if (subjectFilter) opts.filter_subjects = [subjectFilter];
+
+    const consumer = await js.consumers.get(name, opts);
+    const iter = await consumer.consume();
+    activeTail = iter;
+
+    (async () => {
+      try {
+        for await (const m of iter) {
+          if (onMsg) onMsg({
+            seq: m.seq,
+            subject: m.subject,
+            data: decodePayload(m.data),
+            time: m.time,
+            headers: headersToObject(m.headers),
+          });
+        }
+      } catch (err) {
+        console.error("Stream tail error:", err);
+      }
+    })();
+
+    return iter;
+  } catch (error) {
+    throw new Error(`Failed to tail stream: ${error.message}`);
+  }
+}
+
+export function stopStreamTail() {
+  if (activeTail) {
+    try { activeTail.stop(); } catch (e) { console.error("Error stopping tail:", e); }
+    activeTail = null;
+  }
+}
+
+export function isTailing() {
+  return activeTail !== null;
 }
