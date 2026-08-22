@@ -1,127 +1,135 @@
+// ============================================================================
+// DOM REFERENCES
+// ============================================================================
+// One lookup table for every element the app touches.
+// Modals are NOT here - dialogs.js builds those on demand (see dialogs.js).
+
+const $ = (id) => document.getElementById(id);
+
 export const els = {
-  // Toasts
-  toastContainer: document.getElementById("toast-container"),
+  // --- Chrome ---------------------------------------------------------------
+  toastContainer: $("toast-container"),
+  tabBar: $("tabBar"),
 
-  // Connection & Info
-  url: document.getElementById("serverUrl"),
-  urlHistory: document.getElementById("urlHistory"),
-  creds: document.getElementById("credsFile"),
-  authUser: document.getElementById("authUser"),
-  authPass: document.getElementById("authPass"),
-  authToken: document.getElementById("authToken"),
-  btnConnect: document.getElementById("btnConnect"),
-  profileSelect: document.getElementById("profileSelect"),
-  btnProfileSave: document.getElementById("btnProfileSave"),
-  btnProfileDelete: document.getElementById("btnProfileDelete"),
-  saveCredsChk: document.getElementById("saveCredsChk"),
-  credsHint: document.getElementById("credsHint"),
-  statusText: document.getElementById("statusText"),
-  statusDot: document.getElementById("statusDot"),
-  rttLabel: document.getElementById("rttLabel"),
-  btnInfo: document.getElementById("btnInfo"),
-  
-  // Modals
-  infoModal: document.getElementById("infoModal"),
-  btnCloseModal: document.getElementById("btnCloseModal"),
-  serverInfoPre: document.getElementById("serverInfoPre"),
-  configModal: document.getElementById("configModal"),
-  configModalTitle: document.getElementById("configModalTitle"),
-  btnCloseConfigModal: document.getElementById("btnCloseConfigModal"),
-  configInput: document.getElementById("configInput"),
-  btnConfigSave: document.getElementById("btnConfigSave"),
-  
-  // Panels
-  subPanel: document.getElementById("subPanel"),
-  appPanel: document.getElementById("appPanel"),
-  subSubject: document.getElementById("subSubject"),
-  btnSub: document.getElementById("btnSub"),
-  subList: document.getElementById("subList"),
-  subCount: document.getElementById("subCount"),
-  subHistory: document.getElementById("subHistory"),
-  
-  // Tabs
-  tabMsg: document.getElementById("tabMsg"),
-  tabKv: document.getElementById("tabKv"),
-  tabStream: document.getElementById("tabStream"),
-  panelMsg: document.getElementById("panelMsg"),
-  panelKv: document.getElementById("panelKv"),
-  panelStream: document.getElementById("panelStream"),
+  // --- Connection (app bar + popover) --------------------------------------
+  connPopover: $("connPopover"),
+  btnConnStatus: $("btnConnStatus"),
+  statusText: $("statusText"),
+  statusDot: $("statusDot"),
+  statusHost: $("statusHost"),
+  rttLabel: $("rttLabel"),
+  btnInfo: $("btnInfo"),
 
-  // Messaging
-  templateSelect: document.getElementById("templateSelect"),
-  btnTemplateSave: document.getElementById("btnTemplateSave"),
-  btnTemplateDelete: document.getElementById("btnTemplateDelete"),
-  pubSubject: document.getElementById("pubSubject"),
-  pubPayload: document.getElementById("pubPayload"),
-  btnHeaderToggle: document.getElementById("btnHeaderToggle"),
-  headerContainer: document.getElementById("headerContainer"),
-  pubHeaders: document.getElementById("pubHeaders"),
-  reqTimeout: document.getElementById("reqTimeout"),
-  btnPub: document.getElementById("btnPub"),
-  btnReq: document.getElementById("btnReq"),
-  messages: document.getElementById("messages"),
-  logFilter: document.getElementById("logFilter"),
-  btnPause: document.getElementById("btnPause"),
-  btnClear: document.getElementById("btnClear"),
-  btnDownloadLogs: document.getElementById("btnDownloadLogs"),
+  url: $("serverUrl"),
+  creds: $("credsFile"),
+  authUser: $("authUser"),
+  authPass: $("authPass"),
+  authToken: $("authToken"),
+  btnConnect: $("btnConnect"),
+  saveCredsChk: $("saveCredsChk"),
+  credsHint: $("credsHint"),
 
-  // KV Store
-  btnKvRefresh: document.getElementById("btnKvRefresh"),
-  btnKvCreate: document.getElementById("btnKvCreate"),
-  btnKvEdit: document.getElementById("btnKvEdit"),
-  kvBucketSelect: document.getElementById("kvBucketSelect"),
-  kvKeyList: document.getElementById("kvKeyList"),
-  kvKeyInput: document.getElementById("kvKeyInput"),
-  kvValueInput: document.getElementById("kvValueInput"),
-  kvValueHighlighter: document.getElementById("kvValueHighlighter"), // NEW
-  btnKvToggleMode: document.getElementById("btnKvToggleMode"),       // NEW
-  kvHistoryList: document.getElementById("kvHistoryList"),
-  btnKvCopy: document.getElementById("btnKvCopy"),
-  btnKvGet: document.getElementById("btnKvGet"),
-  btnKvPut: document.getElementById("btnKvPut"),
-  btnKvDelete: document.getElementById("btnKvDelete"),
-  btnKvPurge: document.getElementById("btnKvPurge"),
-  btnKvDeleteBucket: document.getElementById("btnKvDeleteBucket"),
-  kvStatus: document.getElementById("kvStatus"),
-  kvFilter: document.getElementById("kvFilter"),
-  
-  // Streams
-  btnStreamCreate: document.getElementById("btnStreamCreate"),
-  btnStreamRefresh: document.getElementById("btnStreamRefresh"),
-  btnStreamEdit: document.getElementById("btnStreamEdit"),
-  streamList: document.getElementById("streamList"),
-  streamDetailView: document.getElementById("streamDetailView"),
-  streamEmptyState: document.getElementById("streamEmptyState"),
-  streamFilter: document.getElementById("streamFilter"),
-  
-  // Stream Details
-  streamNameTitle: document.getElementById("streamNameTitle"),
-  streamCreated: document.getElementById("streamCreated"),
-  streamSubjects: document.getElementById("streamSubjects"),
-  streamStorage: document.getElementById("streamStorage"),
-  streamRetention: document.getElementById("streamRetention"),
-  streamMsgs: document.getElementById("streamMsgs"),
-  streamBytes: document.getElementById("streamBytes"),
-  streamFirstSeq: document.getElementById("streamFirstSeq"),
-  streamLastSeq: document.getElementById("streamLastSeq"),
-  streamConsumerCount: document.getElementById("streamConsumerCount"),
-  
-  // Stream Actions
-  btnStreamPurge: document.getElementById("btnStreamPurge"),
-  btnStreamDelete: document.getElementById("btnStreamDelete"),
-  
-  // Consumers
-  btnLoadConsumers: document.getElementById("btnLoadConsumers"),
-  btnConsumerCreate: document.getElementById("btnConsumerCreate"),
-  consumerList: document.getElementById("consumerList"),
+  profileSelect: $("profileSelect"),
+  btnProfileSave: $("btnProfileSave"),
+  btnProfileDelete: $("btnProfileDelete"),
 
-  // Messages
-  msgStartSeq: document.getElementById("msgStartSeq"),
-  msgEndSeq: document.getElementById("msgEndSeq"),
-  msgSubjectFilter: document.getElementById("msgSubjectFilter"),
-  btnStreamViewMsgs: document.getElementById("btnStreamViewMsgs"),
-  btnStreamTail: document.getElementById("btnStreamTail"),
-  btnStreamClearMsgs: document.getElementById("btnStreamClearMsgs"),
-  streamMsgFilter: document.getElementById("streamMsgFilter"),
-  streamMsgContainer: document.getElementById("streamMsgContainer"),
+  // --- Subscriptions --------------------------------------------------------
+  subSubject: $("subSubject"),
+  btnSub: $("btnSub"),
+  subList: $("subList"),
+  subCount: $("subCount"),
+
+  // --- Messaging: composer --------------------------------------------------
+  composer: $("composer"),
+  composerBody: $("composerBody"),
+  btnComposerToggle: $("btnComposerToggle"),
+  templateSelect: $("templateSelect"),
+  btnTemplateSave: $("btnTemplateSave"),
+  btnTemplateDelete: $("btnTemplateDelete"),
+  pubSubject: $("pubSubject"),
+  pubPayload: $("pubPayload"),
+  btnHeaderToggle: $("btnHeaderToggle"),
+  headerContainer: $("headerContainer"),
+  pubHeaders: $("pubHeaders"),
+  reqTimeout: $("reqTimeout"),
+  btnPub: $("btnPub"),
+  btnReq: $("btnReq"),
+
+  // --- Messaging: log -------------------------------------------------------
+  messages: $("messages"),
+  logFilter: $("logFilter"),
+  btnPause: $("btnPause"),
+  btnClear: $("btnClear"),
+  btnDownloadLogs: $("btnDownloadLogs"),
+
+  // --- KV: buckets ----------------------------------------------------------
+  kvBucketList: $("kvBucketList"),
+  kvBucketFilter: $("kvBucketFilter"),
+  kvBucketLabel: $("kvBucketLabel"),
+  btnKvCreate: $("btnKvCreate"),
+  btnKvRefresh: $("btnKvRefresh"),
+  btnKvEdit: $("btnKvEdit"),
+  btnKvDeleteBucket: $("btnKvDeleteBucket"),
+
+  // --- KV: keys -------------------------------------------------------------
+  kvKeyList: $("kvKeyList"),
+  kvFilter: $("kvFilter"),
+
+  // --- KV: detail -----------------------------------------------------------
+  kvEmptyState: $("kvEmptyState"),
+  kvDetailView: $("kvDetailView"),
+  kvKeyInput: $("kvKeyInput"),
+  btnKvGet: $("btnKvGet"),
+  kvValueInput: $("kvValueInput"),
+  kvValueHighlighter: $("kvValueHighlighter"),
+  btnKvToggleMode: $("btnKvToggleMode"),
+  btnKvCopy: $("btnKvCopy"),
+  kvRevLabel: $("kvRevLabel"),
+  kvHistoryList: $("kvHistoryList"),
+  kvHistoryCount: $("kvHistoryCount"),
+  kvStatus: $("kvStatus"),
+  btnKvPut: $("btnKvPut"),
+  btnKvDelete: $("btnKvDelete"),
+  btnKvPurge: $("btnKvPurge"),
+
+  // --- Streams: list --------------------------------------------------------
+  streamList: $("streamList"),
+  streamFilter: $("streamFilter"),
+  btnStreamCreate: $("btnStreamCreate"),
+  btnStreamRefresh: $("btnStreamRefresh"),
+
+  // --- Streams: detail ------------------------------------------------------
+  streamEmptyState: $("streamEmptyState"),
+  streamDetailView: $("streamDetailView"),
+  streamNameTitle: $("streamNameTitle"),
+  streamCreated: $("streamCreated"),
+  btnStreamEdit: $("btnStreamEdit"),
+  btnStreamPurge: $("btnStreamPurge"),
+  btnStreamDelete: $("btnStreamDelete"),
+
+  // --- Streams: overview ----------------------------------------------------
+  streamSubjects: $("streamSubjects"),
+  streamStorage: $("streamStorage"),
+  streamRetention: $("streamRetention"),
+  streamMsgs: $("streamMsgs"),
+  streamBytes: $("streamBytes"),
+  streamFirstSeq: $("streamFirstSeq"),
+  streamLastSeq: $("streamLastSeq"),
+  streamConsumerCount: $("streamConsumerCount"),
+
+  // --- Streams: consumers ---------------------------------------------------
+  consumerList: $("consumerList"),
+  consumerTabCount: $("consumerTabCount"),
+  btnConsumerCreate: $("btnConsumerCreate"),
+  btnLoadConsumers: $("btnLoadConsumers"),
+
+  // --- Streams: messages ----------------------------------------------------
+  msgStartSeq: $("msgStartSeq"),
+  msgEndSeq: $("msgEndSeq"),
+  msgSubjectFilter: $("msgSubjectFilter"),
+  btnStreamViewMsgs: $("btnStreamViewMsgs"),
+  btnStreamTail: $("btnStreamTail"),
+  btnStreamClearMsgs: $("btnStreamClearMsgs"),
+  streamMsgFilter: $("streamMsgFilter"),
+  streamMsgContainer: $("streamMsgContainer"),
 };

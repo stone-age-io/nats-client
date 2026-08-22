@@ -2,313 +2,335 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Viewport fixed to prevent zoom issues on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NATS Client</title>
   <link rel="stylesheet" href="./style.css" />
   <link rel="manifest" href="/manifest.json"/>
 </head>
-<body>
-  <!-- TOAST CONTAINER -->
+<body data-conn="disconnected">
+
   <div id="toast-container"></div>
 
-  <!-- SERVER INFO MODAL -->
-  <div id="infoModal" class="modal-overlay">
-    <div class="modal">
-      <div class="box-header">
-        <h3>Server Information</h3>
-        <button id="btnCloseModal" class="sm-btn">✕</button>
+  <!-- Shared datalists -->
+  <datalist id="urlHistory"></datalist>
+  <datalist id="subHistory"></datalist>
+
+  <!-- ==================================================================== -->
+  <!-- APP BAR                                                              -->
+  <!-- ==================================================================== -->
+  <header class="app-bar">
+    <div class="brand"><span aria-hidden="true">&#129482;</span> NATS</div>
+
+    <select id="profileSelect" class="bar-select" title="Connection profile" aria-label="Connection profile">
+      <option value="">-- No Profile --</option>
+    </select>
+
+    <div class="bar-spacer"></div>
+
+    <button id="btnConnStatus" class="conn-pill" popovertarget="connPopover" aria-haspopup="dialog">
+      <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+      <span id="statusText">Disconnected</span>
+      <span id="statusHost" class="conn-host"></span>
+      <span id="rttLabel" class="conn-rtt"></span>
+      <span class="conn-caret" aria-hidden="true">&#9662;</span>
+    </button>
+
+    <button id="btnInfo" class="sm-btn" title="Server information" data-requires-conn>Server info</button>
+  </header>
+
+  <!-- ==================================================================== -->
+  <!-- CONNECTION POPOVER                                                   -->
+  <!-- ==================================================================== -->
+  <div id="connPopover" popover class="conn-popover" role="dialog" aria-label="Connection settings">
+    <div class="pane-head">
+      <h3>Connection</h3>
+      <div class="pane-actions">
+        <button id="btnProfileSave" class="sm-btn" title="Save these settings as a named profile">Save profile</button>
+        <button id="btnProfileDelete" class="sm-btn danger" title="Delete the selected profile">&#10005;</button>
       </div>
-      <pre id="serverInfoPre">Waiting for connection...</pre>
     </div>
+
+    <label for="serverUrl">Server URL</label>
+    <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222"
+           placeholder="ws://localhost:9222" autocorrect="off" autocapitalize="off" spellcheck="false" />
+
+    <div class="field-group">
+      <label>Authentication <span class="muted-xs">(optional)</span></label>
+      <input type="text" id="authUser" placeholder="Username" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <input type="password" id="authPass" placeholder="Password" />
+      <input type="password" id="authToken" placeholder="Token (overrides user/pass)" />
+    </div>
+
+    <div class="field-group">
+      <label for="credsFile">Or upload a .creds file</label>
+      <input type="file" id="credsFile" accept=".creds,.txt" />
+      <div id="credsHint" class="creds-hint" hidden>&#128273; Using credentials from profile</div>
+    </div>
+
+    <label class="check-row">
+      <input type="checkbox" id="saveCredsChk" />
+      <span>Remember credentials in profile <span class="muted-xs">(stored unencrypted)</span></span>
+    </label>
+
+    <button id="btnConnect" class="primary block">Connect</button>
   </div>
 
-  <!-- CONFIG CREATION/EDIT MODAL -->
-  <div id="configModal" class="modal-overlay">
-    <div class="modal">
-      <div class="box-header">
-        <h3 id="configModalTitle">Create Object</h3>
-        <button id="btnCloseConfigModal" class="sm-btn">✕</button>
-      </div>
-      <div style="margin-bottom:10px; color:#888; font-size:0.8rem;">
-        Modify the JSON configuration below.
-      </div>
-      <textarea id="configInput" rows="15" autocorrect="off" autocapitalize="off" spellcheck="false" style="font-family:var(--mono); font-size:0.85rem; white-space:pre;"></textarea>
-      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
-        <button id="btnConfigSave" class="primary">Save</button>
-      </div>
-    </div>
-  </div>
+  <!-- ==================================================================== -->
+  <!-- TABS                                                                 -->
+  <!-- ==================================================================== -->
+  <nav class="tabs" id="tabBar" role="tablist" aria-label="Sections">
+    <button class="tab active" data-tab="msg" role="tab" aria-selected="true" aria-controls="panel-msg">Messaging</button>
+    <button class="tab" data-tab="kv" role="tab" aria-selected="false" aria-controls="panel-kv">KV Store</button>
+    <button class="tab" data-tab="stream" role="tab" aria-selected="false" aria-controls="panel-stream">Streams</button>
+  </nav>
 
-  <div class="main-layout">
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div style="display:flex; align-items:center; padding: 0 5px;">
-        <div id="statusDot" class="status-dot"></div>
-        <h1 style="flex-grow:1">NATS 🪨</h1>
-        <div style="text-align:right;">
-          <div id="statusText" style="font-size:0.75rem; color:var(--muted);">Disconnected</div>
-          <div id="rttLabel" style="font-size:0.65rem; color:var(--muted); opacity:0;">RTT: -</div>
-        </div>
-        <button id="btnInfo" class="sm-btn" style="margin-left:8px; padding:2px 6px;">i</button>
-      </div>
-      
-      <div class="box">
-        <div class="box-header"><h3>Connection</h3></div>
+  <main class="workspace">
 
-        <label>Profile</label>
-        <div style="display:flex; gap:5px; margin-bottom:10px;">
-          <select id="profileSelect" style="flex:1; margin-bottom:0;"><option value="">-- No Profile --</option></select>
-          <button id="btnProfileSave" class="sm-btn" title="Save current settings as a named profile">Save</button>
-          <button id="btnProfileDelete" class="sm-btn" title="Delete selected profile">✕</button>
-        </div>
+    <!-- ================================================================== -->
+    <!-- MESSAGING                                                          -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" data-tab-panel="msg" id="panel-msg" role="tabpanel">
+      <div class="panes panes-msg">
 
-        <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222" placeholder="ws://..." autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <datalist id="urlHistory"></datalist>
-
-        <div style="margin-bottom: 10px; border-top: 1px solid #333; padding-top:10px;">
-          <label>Authentication (Optional)</label>
-          <input type="text" id="authUser" placeholder="Username" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom: 5px;" />
-          <input type="password" id="authPass" placeholder="Password" style="margin-bottom: 5px;" />
-          <input type="password" id="authToken" placeholder="Token (overrides User/Pass)" />
-          <div style="margin-top:5px; font-size:0.75rem; color:#666;">OR upload .creds file:</div>
-        </div>
-
-        <input type="file" id="credsFile" accept=".creds,.txt" />
-        <div id="credsHint" style="display:none; font-size:0.75rem; color:var(--accent); margin-bottom:8px;">🔑 Using credentials from profile</div>
-        <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer; margin-bottom:10px;">
-          <input type="checkbox" id="saveCredsChk" style="width:auto; margin:0;" />
-          Remember credentials in profile (stored unencrypted)
-        </label>
-        <button id="btnConnect" class="primary" style="width:100%">Connect</button>
-      </div>
-
-      <div class="box box-grow" id="subPanel" style="display:none;">
-        <div class="box-header">
-          <h3>Subscriptions <span id="subCount" style="color:var(--accent)">(0)</span></h3>
-        </div>
-        <div style="display: flex; gap: 5px; margin-bottom: 10px; flex-shrink: 0;">
-          <input type="text" id="subSubject" list="subHistory" placeholder="Subject (Enter to add)" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:0;" />
-          <button id="btnSub" class="accent icon-btn">+</button>
-        </div>
-        <div class="scroll-container">
-          <ul id="subList"></ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- CONTENT -->
-    <div class="content" id="appPanel" style="display:none;">
-      <datalist id="subHistory"></datalist>
-
-      <div class="tab-bar">
-        <button id="tabMsg" class="tab-btn active">Messaging</button>
-        <button id="tabKv" class="tab-btn">KV Store</button>
-        <button id="tabStream" class="tab-btn">Streams</button>
-      </div>
-
-      <!-- MESSAGING PANEL -->
-      <div id="panelMsg" class="panel-content">
-        <div class="box">
-          <div class="box-header">
-            <h3>Publish / Request</h3>
-            <div style="display:flex; gap:5px; align-items:center;">
-              <select id="templateSelect" class="sm-input" style="width:160px; text-align:left;"><option value="">-- Templates --</option></select>
-              <button id="btnTemplateSave" class="sm-btn" title="Save current subject/payload/headers as a template">Save</button>
-              <button id="btnTemplateDelete" class="sm-btn" title="Delete selected template">✕</button>
-            </div>
+        <div class="pane pane-list">
+          <div class="pane-head">
+            <h3>Subscriptions <span id="subCount" class="accent">(0)</span></h3>
           </div>
-          <div style="display: flex; gap: 10px;" class="pub-row">
-            <div style="flex: 1;">
-              <input type="text" id="pubSubject" list="subHistory" placeholder="Subject" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:8px;" />
-              <textarea id="pubPayload" rows="5" placeholder='Payload (Ctrl+Enter to send)' autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:8px;"></textarea>
-              <div style="border-top: 1px solid #222; padding-top: 8px;">
-                <button id="btnHeaderToggle" class="sm-btn" style="width:100%; text-align:left;">► Add Headers (Optional)</button>
-                <div id="headerContainer" style="display:none; margin-top: 8px;">
-                  <label>Headers (JSON format)</label>
-                  <textarea id="pubHeaders" rows="3" placeholder='{"Content-Type": "application/json"}' autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-                </div>
+          <div class="sub-add">
+            <input type="text" id="subSubject" list="subHistory" placeholder="subject.&gt;  (Enter to add)"
+                   autocorrect="off" autocapitalize="off" spellcheck="false" data-requires-conn />
+            <button id="btnSub" class="accent icon-btn" title="Subscribe" data-requires-conn>+</button>
+          </div>
+          <ul id="subList" class="list-scroll"></ul>
+        </div>
+
+        <div class="pane-main">
+
+          <div class="pane composer" id="composer">
+            <div class="pane-head">
+              <button id="btnComposerToggle" class="disclosure" aria-expanded="true">
+                <span class="chev" aria-hidden="true">&#9662;</span> Publish / Request
+              </button>
+              <div class="pane-actions">
+                <select id="templateSelect" class="bar-select sm" title="Message templates">
+                  <option value="">-- Templates --</option>
+                </select>
+                <button id="btnTemplateSave" class="sm-btn" title="Save subject/payload/headers as a template">Save</button>
+                <button id="btnTemplateDelete" class="sm-btn danger" title="Delete selected template">&#10005;</button>
               </div>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 5px; min-width: 90px;" class="pub-actions">
-              <button id="btnPub" class="primary">Pub</button>
-              <button id="btnReq" class="accent">Req</button>
-              <div style="margin-top: 5px;">
-                <label>Timeout (ms)</label>
-                <input type="number" id="reqTimeout" value="2000" class="sm-input" />
+
+            <div class="composer-row">
+              <input type="text" id="pubSubject" list="subHistory" placeholder="Subject"
+                     autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <input type="number" id="reqTimeout" value="2000" class="sm-input timeout"
+                     title="Request timeout (ms)" aria-label="Request timeout in milliseconds" />
+              <button id="btnPub" class="primary" data-requires-conn>Pub</button>
+              <button id="btnReq" class="accent" data-requires-conn>Req</button>
+            </div>
+
+            <div class="composer-body" id="composerBody">
+              <textarea id="pubPayload" placeholder="Payload (Ctrl+Enter to publish)"
+                        autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+              <button id="btnHeaderToggle" class="disclosure sm" aria-expanded="false" aria-controls="headerContainer">
+                <span class="chev" aria-hidden="true">&#9656;</span> Headers
+              </button>
+              <div id="headerContainer" hidden>
+                <textarea id="pubHeaders" rows="3" placeholder="&#123;&quot;Content-Type&quot;: &quot;application/json&quot;&#125;"
+                          autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="box box-grow">
-          <div class="box-header">
-            <div style="display:flex; align-items:baseline; gap:10px;">
-                <h3 style="border:none; padding:0;">Message Log</h3>
-                <span class="sort-indicator" title="Newest messages appear at the top">⬇ Newest Top</span>
-            </div>
-            <div style="display:flex; gap: 10px; align-items: center;">
-              <input type="text" id="logFilter" class="filter-input" placeholder="Filter logs..." autocorrect="off" autocapitalize="off" spellcheck="false" />
-              <button id="btnDownloadLogs" class="sm-btn" title="Download Logs as JSON">⬇</button>
-              <button id="btnPause" class="sm-btn" style="width: 60px;">Pause</button>
-              <button id="btnClear" class="sm-btn">Clear</button>
-            </div>
-          </div>
-          <div id="messages"></div>
-        </div>
-      </div>
-
-      <!-- KV PANEL -->
-      <div id="panelKv" class="panel-content" style="display:none;">
-        <div class="box box-grow">
-          <div class="box-header">
-            <h3>JetStream KV Store</h3>
-            <div style="display:flex; gap:5px;">
-              <button id="btnKvEdit" class="sm-btn" title="Edit Bucket Config">Edit</button>
-              <button id="btnKvCreate" class="sm-btn" title="Create Bucket">+</button>
-              <button id="btnKvDeleteBucket" class="sm-btn danger" title="Delete Bucket (and all data)">Del</button>
-              <button id="btnKvRefresh" class="sm-btn">Refresh</button>
-            </div>
-          </div>
-          <div style="margin-bottom: 10px;">
-            <label>Select Bucket</label>
-            <select id="kvBucketSelect"><option value="">-- Select a Bucket --</option></select>
-          </div>
-          <div class="kv-layout">
-            <div class="kv-list">
-              <label>Keys (Live Watch active)</label>
-              <input type="text" id="kvFilter" class="sm-input" placeholder="Filter keys..." style="width:100%; margin-bottom:8px; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
-              <div id="kvKeyList"><div class="kv-empty">Select a bucket to view keys</div></div>
-            </div>
-            <div class="kv-editor">
-              <div>
-                <label>Key Name</label>
-                <div style="display:flex; gap:5px;">
-                  <input type="text" id="kvKeyInput" placeholder="Key" autocorrect="off" autocapitalize="off" spellcheck="false" />
-                  <button id="btnKvGet" class="accent">Get</button>
-                </div>
-              </div>
-              <div style="flex-grow:1; display:flex; flex-direction:column;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <label>Value</label>
-                  <div style="display:flex; gap:5px; align-items:center; margin-bottom:4px;">
-                     <button id="btnKvToggleMode" class="sm-btn" style="min-width:70px;">✎ Edit</button>
-                     <button id="btnKvCopy" class="sm-btn">Copy</button>
-                  </div>
-                </div>
-                
-                <!-- UPDATED: Container for View/Edit Toggle -->
-                <div style="flex-grow:1; display:flex; flex-direction:column; min-height:200px; margin-bottom:10px;">
-                    <textarea id="kvValueInput" style="flex-grow:1; display:none;" placeholder="Value" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-                    <pre id="kvValueHighlighter" style="flex-grow:1; margin:0; border:1px solid var(--border); background:var(--input-bg); padding:10px; overflow:auto;"></pre>
-                </div>
-
-                <!-- History Section -->
-                <div style="border-top: 1px solid #333; padding-top:5px; max-height: 150px; overflow-y:auto;">
-                  <label>History / Revisions</label>
-                  <div id="kvHistoryList" style="font-size:0.75rem; color:var(--muted);">Select a key to view history</div>
-                </div>
-              </div>
-              <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
-                 <span id="kvStatus" style="margin-right:auto; color:var(--accent); align-self:center; font-size:0.8rem;"></span>
-                 <button id="btnKvPurge" class="danger" title="Remove key AND its revision history">Purge Key</button>
-                 <button id="btnKvDelete" class="danger" title="Delete key (history is kept)">Delete Key</button>
-                 <button id="btnKvPut" class="primary">Put / Update</button>
+          <div class="pane log-pane">
+            <div class="pane-head">
+              <h3>Message Log <span class="hint" title="Newest messages appear at the top">&#8681; newest first</span></h3>
+              <div class="pane-actions">
+                <input type="text" id="logFilter" class="pane-filter inline" placeholder="Filter&#8230;"
+                       autocorrect="off" autocapitalize="off" spellcheck="false" />
+                <button id="btnDownloadLogs" class="sm-btn" title="Download logs as JSON">&#8681;</button>
+                <button id="btnPause" class="sm-btn fixed-w">Pause</button>
+                <button id="btnClear" class="sm-btn">Clear</button>
               </div>
             </div>
+            <div id="messages" class="list-scroll"></div>
           </div>
+
         </div>
       </div>
+    </section>
 
-      <!-- STREAM PANEL -->
-      <div id="panelStream" class="panel-content" style="display:none;">
-        <div class="box box-grow">
-          <div class="box-header">
-            <h3>JetStream Streams</h3>
-            <div style="display:flex; gap:5px;">
-              <button id="btnStreamEdit" class="sm-btn" title="Edit Stream Config">Edit</button>
-              <button id="btnStreamCreate" class="sm-btn" title="Create Stream">+</button>
-              <button id="btnStreamRefresh" class="sm-btn">Refresh</button>
+    <!-- ================================================================== -->
+    <!-- KV STORE                                                           -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" data-tab-panel="kv" id="panel-kv" role="tabpanel" hidden>
+      <div class="panes panes-kv">
+
+        <div class="pane pane-list">
+          <div class="pane-head">
+            <h3>Buckets</h3>
+            <div class="pane-actions">
+              <button id="btnKvCreate" class="sm-btn" title="Create bucket" data-requires-conn>+</button>
+              <button id="btnKvRefresh" class="sm-btn" title="Refresh bucket list" data-requires-conn>&#10227;</button>
             </div>
           </div>
-          
-          <div class="kv-layout">
-            
-            <!-- Stream List -->
-            <div class="kv-list">
-              <label>Streams</label>
-              <input type="text" id="streamFilter" class="sm-input" placeholder="Filter streams..." style="width:100%; margin-bottom:8px; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
-              <div id="streamList"><div class="kv-empty">Loading...</div></div>
+          <input type="text" id="kvBucketFilter" class="pane-filter" placeholder="Filter buckets&#8230;"
+                 autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <div id="kvBucketList" class="list-scroll"><div class="empty">Not connected</div></div>
+        </div>
+
+        <div class="pane pane-list">
+          <div class="pane-head">
+            <h3 id="kvBucketLabel">Keys</h3>
+            <div class="pane-actions">
+              <button id="btnKvEdit" class="sm-btn" title="Edit bucket configuration" disabled>Config</button>
+              <button id="btnKvDeleteBucket" class="sm-btn danger" title="Delete bucket and all its data" disabled>Delete</button>
+            </div>
+          </div>
+          <input type="text" id="kvFilter" class="pane-filter" placeholder="Filter keys&#8230;"
+                 autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <div id="kvKeyList" class="list-scroll"><div class="empty">Select a bucket</div></div>
+        </div>
+
+        <div class="pane pane-detail">
+          <div id="kvEmptyState" class="empty empty-fill">Select a bucket to browse keys</div>
+
+          <div id="kvDetailView" class="detail-body" hidden>
+            <div class="pane-head">
+              <div class="key-row">
+                <input type="text" id="kvKeyInput" class="key-input" placeholder="key.name"
+                       autocorrect="off" autocapitalize="off" spellcheck="false" />
+                <button id="btnKvGet" class="sm-btn" title="Load this key">Get</button>
+              </div>
             </div>
 
-            <!-- Stream Details -->
-            <div class="kv-editor" id="streamDetailView" style="display:none;">
-              <div style="border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                  <h2 id="streamNameTitle" style="margin:0; color:var(--primary);">Stream Name</h2>
-                  <span id="streamCreated" style="font-size:0.75rem; color:#666;"></span>
-              </div>
+            <nav class="subtabs" data-subtabs="kv" role="tablist" aria-label="Key detail">
+              <button class="subtab active" data-subtab="value" role="tab" aria-selected="true">Value</button>
+              <button class="subtab" data-subtab="history" role="tab" aria-selected="false">
+                History <span id="kvHistoryCount" class="pill-count">0</span>
+              </button>
+            </nav>
 
-              <!-- Config Grid -->
+            <div class="subtab-panel" data-subtab-panel="value" role="tabpanel">
+              <div class="mini-toolbar">
+                <button id="btnKvToggleMode" class="sm-btn fixed-w-lg">&#9998; Edit</button>
+                <button id="btnKvCopy" class="sm-btn">Copy</button>
+                <span id="kvRevLabel" class="muted-xs push-right"></span>
+              </div>
+              <textarea id="kvValueInput" class="value-edit" placeholder="Value"
+                        autocorrect="off" autocapitalize="off" spellcheck="false" hidden></textarea>
+              <pre id="kvValueHighlighter" class="value-view"></pre>
+            </div>
+
+            <div class="subtab-panel" data-subtab-panel="history" role="tabpanel" hidden>
+              <div id="kvHistoryList" class="list-scroll">
+                <div class="empty">Select a key to view its revisions</div>
+              </div>
+            </div>
+
+            <div class="pane-foot">
+              <span id="kvStatus" class="foot-status"></span>
+              <button id="btnKvPurge" class="sm-btn danger" title="Remove key AND its revision history">Purge</button>
+              <button id="btnKvDelete" class="sm-btn danger" title="Delete key (history is kept)">Delete</button>
+              <button id="btnKvPut" class="primary">Put / Update</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STREAMS                                                            -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" data-tab-panel="stream" id="panel-stream" role="tabpanel" hidden>
+      <div class="panes panes-stream">
+
+        <div class="pane pane-list">
+          <div class="pane-head">
+            <h3>Streams</h3>
+            <div class="pane-actions">
+              <button id="btnStreamCreate" class="sm-btn" title="Create stream" data-requires-conn>+</button>
+              <button id="btnStreamRefresh" class="sm-btn" title="Refresh stream list" data-requires-conn>&#10227;</button>
+            </div>
+          </div>
+          <input type="text" id="streamFilter" class="pane-filter" placeholder="Filter streams&#8230;"
+                 autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <div id="streamList" class="list-scroll"><div class="empty">Not connected</div></div>
+        </div>
+
+        <div class="pane pane-detail">
+          <div id="streamEmptyState" class="empty empty-fill">Select a stream to view details</div>
+
+          <div id="streamDetailView" class="detail-body" hidden>
+            <div class="pane-head detail-head">
+              <div class="detail-title">
+                <h2 id="streamNameTitle">Stream</h2>
+                <span id="streamCreated" class="muted-xs"></span>
+              </div>
+              <div class="pane-actions">
+                <button id="btnStreamEdit" class="sm-btn">Edit config</button>
+                <button id="btnStreamPurge" class="sm-btn warn">Purge</button>
+                <button id="btnStreamDelete" class="sm-btn danger">Delete</button>
+              </div>
+            </div>
+
+            <nav class="subtabs" data-subtabs="stream" role="tablist" aria-label="Stream detail">
+              <button class="subtab active" data-subtab="overview" role="tab" aria-selected="true">Overview</button>
+              <button class="subtab" data-subtab="consumers" role="tab" aria-selected="false">
+                Consumers <span id="consumerTabCount" class="pill-count">0</span>
+              </button>
+              <button class="subtab" data-subtab="messages" role="tab" aria-selected="false">Messages</button>
+            </nav>
+
+            <div class="subtab-panel scrolls" data-subtab-panel="overview" role="tabpanel">
               <div class="info-grid">
-                  <div class="info-item"><label>Subjects</label><span id="streamSubjects" style="color:var(--accent)">-</span></div>
-                  <div class="info-item"><label>Storage</label><span id="streamStorage">-</span></div>
-                  <div class="info-item"><label>Retention</label><span id="streamRetention">-</span></div>
-                  <div class="info-item"><label>Messages</label><span id="streamMsgs">-</span></div>
-                  <div class="info-item"><label>Bytes</label><span id="streamBytes">-</span></div>
-                  <div class="info-item"><label>First Seq</label><span id="streamFirstSeq">-</span></div>
-                  <div class="info-item"><label>Last Seq</label><span id="streamLastSeq">-</span></div>
-                  <div class="info-item"><label>Consumer Count</label><span id="streamConsumerCount">-</span></div>
+                <div class="info-item wide"><label>Subjects</label><span id="streamSubjects" class="accent">-</span></div>
+                <div class="info-item"><label>Storage</label><span id="streamStorage">-</span></div>
+                <div class="info-item"><label>Retention</label><span id="streamRetention">-</span></div>
+                <div class="info-item"><label>Messages</label><span id="streamMsgs">-</span></div>
+                <div class="info-item"><label>Bytes</label><span id="streamBytes">-</span></div>
+                <div class="info-item"><label>First Seq</label><span id="streamFirstSeq">-</span></div>
+                <div class="info-item"><label>Last Seq</label><span id="streamLastSeq">-</span></div>
+                <div class="info-item"><label>Consumers</label><span id="streamConsumerCount">-</span></div>
               </div>
-              
-              <div style="margin-top:15px; display:flex; gap:10px; justify-content:flex-end; border-bottom:1px solid #333; padding-bottom:15px;">
-                  <button id="btnStreamPurge" class="paused">Purge Messages</button>
-                  <button id="btnStreamDelete" class="danger">Delete Stream</button>
-              </div>
-
-              <!-- Consumers Section -->
-              <div style="margin-top:10px; border-bottom:1px solid #333; padding-bottom:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                    <label>Consumers</label>
-                    <div style="display:flex; gap:5px;">
-                      <button id="btnConsumerCreate" class="sm-btn" title="Create Consumer">+</button>
-                      <button id="btnLoadConsumers" class="sm-btn">Refresh</button>
-                    </div>
-                </div>
-                <div id="consumerList" class="scroll-container" style="height:120px; min-height:120px; background:#0d1117; border:1px solid var(--border);">
-                    <div style="padding:10px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Loading...</div>
-                </div>
-              </div>
-
-              <!-- Stream Messages Section -->
-              <div style="flex-grow:1; display:flex; flex-direction:column; margin-top:10px; min-height:200px;">
-                <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:5px; gap:5px;">
-                    <label style="margin:0;">Messages (Max 200)</label>
-                    <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
-                        <input type="text" id="msgSubjectFilter" placeholder="Subject filter (e.g. orders.>)" class="sm-input" style="width:180px; margin-bottom:0; text-align:left;" autocorrect="off" autocapitalize="off" spellcheck="false">
-                        <input type="number" id="msgStartSeq" placeholder="Start" class="sm-input" style="width:80px; margin-bottom:0;">
-                        <span>-</span>
-                        <input type="number" id="msgEndSeq" placeholder="End" class="sm-input" style="width:80px; margin-bottom:0;">
-                        <button id="btnStreamViewMsgs" class="sm-btn">Load</button>
-                        <button id="btnStreamTail" class="sm-btn" title="Live-follow new messages on this stream">▶ Tail</button>
-                        <button id="btnStreamClearMsgs" class="sm-btn">Clear</button>
-                    </div>
-                </div>
-                <input type="text" id="streamMsgFilter" class="filter-input" placeholder="Filter loaded messages..." style="width:100%; margin-bottom:5px;" autocorrect="off" autocapitalize="off" spellcheck="false">
-                <div id="streamMsgContainer" class="scroll-container" style="background:#0d1117; border:1px solid var(--border); flex-grow:1;">
-                    <div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-style:italic;">Click Load to view stream messages</div>
-                </div>
-              </div>
-
             </div>
-            
-            <div id="streamEmptyState" class="kv-empty">Select a stream to view details</div>
 
+            <div class="subtab-panel" data-subtab-panel="consumers" role="tabpanel" hidden>
+              <div class="mini-toolbar">
+                <button id="btnConsumerCreate" class="sm-btn">+ Consumer</button>
+                <button id="btnLoadConsumers" class="sm-btn">&#10227; Refresh</button>
+              </div>
+              <div id="consumerList" class="list-scroll"></div>
+            </div>
+
+            <div class="subtab-panel" data-subtab-panel="messages" role="tabpanel" hidden>
+              <div class="mini-toolbar wrap">
+                <input type="text" id="msgSubjectFilter" class="sm-input subj" placeholder="Subject filter (orders.&gt;)"
+                       autocorrect="off" autocapitalize="off" spellcheck="false" />
+                <span class="seq-group">
+                  <input type="number" id="msgStartSeq" class="sm-input seq" placeholder="Start" aria-label="Start sequence" />
+                  <span class="dash">&#8211;</span>
+                  <input type="number" id="msgEndSeq" class="sm-input seq" placeholder="End" aria-label="End sequence" />
+                </span>
+                <button id="btnStreamViewMsgs" class="sm-btn">Load</button>
+                <button id="btnStreamTail" class="sm-btn fixed-w-lg" title="Live-follow new messages">&#9654; Tail</button>
+                <button id="btnStreamClearMsgs" class="sm-btn">Clear</button>
+                <input type="text" id="streamMsgFilter" class="pane-filter inline push-right" placeholder="Filter loaded&#8230;"
+                       autocorrect="off" autocapitalize="off" spellcheck="false" />
+              </div>
+              <div id="streamMsgContainer" class="list-scroll">
+                <div class="empty">Click Load to view stream messages</div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-    </div>
-  </div>
+      </div>
+    </section>
+
+  </main>
+
   <script type="module" src="/main.js"></script>
 </body>
 </html>
