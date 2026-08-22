@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NATS Client</title>
   <link rel="stylesheet" href="./style.css" />
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="manifest" href="/manifest.json"/>
 </head>
 <body data-conn="disconnected">
@@ -19,7 +21,18 @@
   <!-- APP BAR                                                              -->
   <!-- ==================================================================== -->
   <header class="app-bar">
-    <div class="brand"><span aria-hidden="true">&#129482;</span> NATS</div>
+    <div class="brand">
+      <!--
+        Stone-Age.io mark, same path as helpdesk ui/src/components/BrandLogo.vue.
+        The inner subpath winds against the outer circle, so the nonzero fill
+        rule knocks out the interior; the white disc behind it fills the hole.
+      -->
+      <svg class="brand-mark" viewBox="0 0 256 256" role="img" aria-label="Stone Age NATS Client">
+        <circle cx="128" cy="128" r="128" fill="#fff"/>
+        <path fill="var(--brand)" d="M128,0 C57.343,0 0,57.343 0,128 C0,198.657 57.343,256 128,256 C198.657,256 256,198.657 256,128 C256,57.343 198.657,0 128,0 z M128,28 C181.423,28 224.757,71.334 224.757,124.757 C224.757,139.486 221.04,153.32 214.356,165.42 C198.756,148.231 178.567,138.124 162.876,124.331 C155.723,124.214 128.543,124.043 113.254,124.043 C113.254,147.334 113.254,172.064 113.254,190.513 C100.456,179.347 94.543,156.243 94.543,156.243 C83.432,147.065 31.243,124.757 31.243,124.757 C31.243,71.334 74.577,28 128,28 z"/>
+      </svg>
+      NATS
+    </div>
 
     <select id="profileSelect" class="bar-select" title="Connection profile" aria-label="Connection profile">
       <option value="">-- No Profile --</option>
@@ -123,28 +136,42 @@
             <div class="composer-row">
               <input type="text" id="pubSubject" list="subHistory" placeholder="Subject"
                      autocorrect="off" autocapitalize="off" spellcheck="false" />
-              <input type="number" id="reqTimeout" value="2000" class="sm-input timeout"
-                     title="Request timeout (ms)" aria-label="Request timeout in milliseconds" />
-              <button id="btnPub" class="primary" data-requires-conn>Pub</button>
-              <button id="btnReq" class="accent" data-requires-conn>Req</button>
+              <span class="composer-send">
+                <button id="btnPub" class="primary" data-requires-conn>Pub</button>
+                <button id="btnReq" class="accent" data-requires-conn>Req</button>
+              </span>
             </div>
 
             <div class="composer-body" id="composerBody">
               <textarea id="pubPayload" placeholder="Payload (Ctrl+Enter to publish)"
                         autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-              <button id="btnHeaderToggle" class="disclosure sm" aria-expanded="false" aria-controls="headerContainer">
-                <span class="chev" aria-hidden="true">&#9656;</span> Headers
-              </button>
+
+              <div class="composer-opts">
+                <button id="btnHeaderToggle" class="disclosure sm" aria-expanded="false" aria-controls="headerContainer">
+                  <span class="chev" aria-hidden="true">&#9656;</span> Headers
+                  <span id="headerCount" class="pill-count" hidden>0</span>
+                </button>
+                <label class="inline-field">
+                  Req timeout
+                  <input type="number" id="reqTimeout" value="2000" class="sm-input timeout"
+                         aria-label="Request timeout in milliseconds" /> ms
+                </label>
+              </div>
+
               <div id="headerContainer" hidden>
-                <textarea id="pubHeaders" rows="3" placeholder="&#123;&quot;Content-Type&quot;: &quot;application/json&quot;&#125;"
-                          autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+                <div id="headerRows" class="header-rows"></div>
+                <button id="btnHeaderAdd" class="sm-btn">+ Add header</button>
               </div>
             </div>
           </div>
 
           <div class="pane log-pane">
             <div class="pane-head">
-              <h3>Message Log <span class="hint" title="Newest messages appear at the top">&#8681; newest first</span></h3>
+              <h3>Message Log
+                <button id="btnLogOrder" class="hint" title="Toggle whether new messages arrive at the bottom or the top">
+                  &#8681; newest last
+                </button>
+              </h3>
               <div class="pane-actions">
                 <input type="text" id="logFilter" class="pane-filter inline" placeholder="Filter&#8230;"
                        autocorrect="off" autocapitalize="off" spellcheck="false" />
@@ -153,7 +180,10 @@
                 <button id="btnClear" class="sm-btn">Clear</button>
               </div>
             </div>
-            <div id="messages" class="list-scroll"></div>
+            <div class="log-wrap">
+              <div id="messages" class="list-scroll"></div>
+              <button id="btnJumpLatest" class="jump-latest" hidden>&#8681; <span id="jumpCount">0</span> new</button>
+            </div>
           </div>
 
         </div>

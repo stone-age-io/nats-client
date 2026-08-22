@@ -69,15 +69,22 @@ const SUPPORTS_POPOVER = Object.prototype.hasOwnProperty.call(HTMLElement.protot
 
 function initializeApp() {
   ui.initializeEventDelegation();
+  ui.initializeLogScrollTracking();
   setupTabNavigation();
   setupSubTabNavigation();
   setupSubscriptionEventDelegation();
   setupConsumerEventDelegation();
+  setupHeaderEditor();
   setupConnPopover();
 
   refreshHistoryUi();
   refreshProfileUi();
   refreshTemplateUi();
+
+  // Restore log direction before anything can render into the log
+  ui.setNewestFirst(storage.getLogNewestFirst(), { reflow: false });
+  ui.clearLogs();
+  ui.renderHeaderRows({});
 
   const savedUrl = storage.getLastUrl();
   if (savedUrl) els.url.value = savedUrl;
@@ -130,6 +137,27 @@ function setupSubscriptionEventDelegation() {
       els.pubSubject.focus();
     }
   });
+}
+
+/**
+ * Header key/value rows: add, remove, and keep the count badge in sync.
+ * Rows are delegated because they are created and destroyed freely.
+ */
+function setupHeaderEditor() {
+  els.btnHeaderAdd.addEventListener("click", () => {
+    const row = ui.addHeaderRow();
+    row.querySelector(".header-key").focus();
+  });
+
+  els.headerRows.addEventListener("click", (e) => {
+    if (!e.target.classList.contains("header-remove")) return;
+    e.target.closest(".header-row").remove();
+    // Never leave the editor with nothing to type into
+    if (!els.headerRows.querySelector(".header-row")) ui.addHeaderRow();
+    ui.updateHeaderCount();
+  });
+
+  els.headerRows.addEventListener("input", () => ui.updateHeaderCount());
 }
 
 function refreshHistoryUi() {
@@ -490,7 +518,7 @@ function handlePublish() {
   try {
     storage.addSubjectToHistory(subj);
     refreshHistoryUi();
-    nats.publish(subj, els.pubPayload.value, els.pubHeaders.value);
+    nats.publish(subj, els.pubPayload.value, ui.readHeadersJson());
 
     els.btnPub.textContent = "✓";
     setTimeout(() => (els.btnPub.textContent = "Pub"), 1000);
@@ -514,7 +542,7 @@ async function handleRequest() {
     refreshHistoryUi();
     els.btnReq.disabled = true;
 
-    const msg = await nats.request(subj, els.pubPayload.value, els.pubHeaders.value, timeout);
+    const msg = await nats.request(subj, els.pubPayload.value, ui.readHeadersJson(), timeout);
     ui.renderMessage(msg.subject, msg.data, true, msg.headers);
   } catch (err) {
     console.error("Request error:", err);
@@ -567,11 +595,18 @@ function handleTemplateChange() {
 
   els.pubSubject.value = template.subject || "";
   els.pubPayload.value = template.payload || "";
-  els.pubHeaders.value = template.headers || "";
-
-  if (template.headers) setHeadersVisible(true);
+  // Templates still store headers as a JSON string; fan it back out into rows
+  let headerObj = {};
+  if (template.headers) {
+    try {
+      headerObj = JSON.parse(template.headers);
+    } catch {
+      console.warn(`Template '${template.name}' has unparseable headers; ignoring them.`);
+    }
+  }
+  ui.renderHeaderRows(headerObj);
+  if (Object.keys(headerObj).length > 0) setHeadersVisible(true);
   utils.validateJsonInput(els.pubPayload);
-  utils.validateJsonInput(els.pubHeaders);
 }
 
 async function handleTemplateSave() {
@@ -587,7 +622,7 @@ async function handleTemplateSave() {
     name,
     subject: els.pubSubject.value.trim(),
     payload: els.pubPayload.value,
-    headers: els.pubHeaders.value.trim(),
+    headers: ui.readHeadersJson(),
   });
   refreshTemplateUi();
   els.templateSelect.value = name;
@@ -626,6 +661,11 @@ els.btnTemplateDelete.addEventListener("click", handleTemplateDelete);
 els.btnClear.addEventListener("click", () => ui.clearLogs());
 els.logFilter.addEventListener("keyup", (e) => ui.filterLogs(e.target.value));
 els.btnPause.addEventListener("click", ui.toggleLogPause);
+els.btnLogOrder.addEventListener("click", () => {
+  const next = !ui.isNewestFirst();
+  ui.setNewestFirst(next);
+  storage.setLogNewestFirst(next);
+});
 els.btnDownloadLogs.addEventListener("click", ui.downloadLogs);
 
 // ============================================================================
@@ -633,14 +673,10 @@ els.btnDownloadLogs.addEventListener("click", ui.downloadLogs);
 // ============================================================================
 
 els.pubPayload.addEventListener("input", () => utils.validateJsonInput(els.pubPayload));
-els.pubHeaders.addEventListener("input", () => utils.validateJsonInput(els.pubHeaders));
 els.kvValueInput.addEventListener("input", () => utils.validateJsonInput(els.kvValueInput));
 
 els.pubPayload.addEventListener("blur", () => {
   if (utils.validateJsonInput(els.pubPayload)) utils.beautify(els.pubPayload);
-});
-els.pubHeaders.addEventListener("blur", () => {
-  if (utils.validateJsonInput(els.pubHeaders)) utils.beautify(els.pubHeaders);
 });
 els.kvValueInput.addEventListener("blur", () => {
   if (utils.validateJsonInput(els.kvValueInput)) utils.beautify(els.kvValueInput);

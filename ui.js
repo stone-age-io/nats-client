@@ -37,10 +37,16 @@ const TOAST_DURATION_MS = 3500;
 /** Replace a container's contents with a centred empty/error message. */
 export function setEmpty(container, message, isError = false) {
   container.replaceChildren();
-  const div = document.createElement("div");
-  div.className = "empty" + (isError ? " is-error" : "");
-  div.textContent = message;
-  container.append(div);
+  // A <ul> may only contain <li>, so match the tag to the container
+  const el = document.createElement(container.tagName === "UL" ? "li" : "div");
+  el.className = "empty" + (isError ? " is-error" : "");
+  el.textContent = message;
+  container.append(el);
+}
+
+/** Drop an empty-state placeholder before inserting real content. */
+function clearEmpty(container) {
+  container.querySelector(":scope > .empty")?.remove();
 }
 
 /** Mark one row in a container active, clearing the rest. */
@@ -143,6 +149,8 @@ export function renderNamedOptions(selectEl, items, placeholder) {
 // ============================================================================
 
 export function addSubscription(id, subject) {
+  clearEmpty(els.subList);
+
   const li = document.createElement("li");
   li.id = `sub-li-${id}`;
 
@@ -162,6 +170,9 @@ export function addSubscription(id, subject) {
 
 export function removeSubscription(id) {
   document.getElementById(`sub-li-${id}`)?.remove();
+  if (!els.subList.querySelector("li:not(.empty)")) {
+    setEmpty(els.subList, "No subscriptions yet");
+  }
 }
 
 export function updateSubCount(count) {
@@ -169,8 +180,86 @@ export function updateSubCount(count) {
 }
 
 export function clearSubscriptions() {
-  els.subList.replaceChildren();
+  setEmpty(els.subList, "No subscriptions yet");
   updateSubCount(0);
+}
+
+// ============================================================================
+// PUBLISH HEADERS EDITOR
+// ============================================================================
+// Key/value rows rather than raw JSON: easier to read, and far easier to edit
+// on a phone. Serialization keeps the same JSON string shape that
+// nats-client.parseHeaders and saved templates already expect.
+
+function headerRow(key = "", value = "") {
+  const row = document.createElement("div");
+  row.className = "header-row";
+
+  const k = document.createElement("input");
+  k.type = "text";
+  k.className = "header-key";
+  k.placeholder = "Header";
+  k.value = key;
+  k.autocomplete = "off";
+  k.spellcheck = false;
+
+  const v = document.createElement("input");
+  v.type = "text";
+  v.className = "header-value";
+  v.placeholder = "Value";
+  v.value = value;
+  v.autocomplete = "off";
+  v.spellcheck = false;
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "sm-btn danger header-remove";
+  del.title = "Remove header";
+  del.textContent = "✕";
+
+  row.append(k, v, del);
+  return row;
+}
+
+export function addHeaderRow(key = "", value = "") {
+  const row = headerRow(key, value);
+  els.headerRows.append(row);
+  updateHeaderCount();
+  return row;
+}
+
+/** Replace all rows from a plain object. Always leaves one blank row to type in. */
+export function renderHeaderRows(obj) {
+  els.headerRows.replaceChildren();
+  const entries = Object.entries(obj || {});
+  entries.forEach(([k, v]) => {
+    els.headerRows.append(headerRow(k, Array.isArray(v) ? v.join(", ") : String(v)));
+  });
+  if (entries.length === 0) els.headerRows.append(headerRow());
+  updateHeaderCount();
+}
+
+/** Collect the filled rows into a plain object. */
+export function readHeaders() {
+  const out = {};
+  els.headerRows.querySelectorAll(".header-row").forEach((row) => {
+    const k = row.querySelector(".header-key").value.trim();
+    const v = row.querySelector(".header-value").value;
+    if (k) out[k] = v;
+  });
+  return out;
+}
+
+/** JSON string for nats-client, or "" when no headers are set. */
+export function readHeadersJson() {
+  const obj = readHeaders();
+  return Object.keys(obj).length ? JSON.stringify(obj) : "";
+}
+
+export function updateHeaderCount() {
+  const n = Object.keys(readHeaders()).length;
+  els.headerCount.textContent = n;
+  els.headerCount.hidden = n === 0;
 }
 
 // ============================================================================
@@ -335,6 +424,41 @@ export function renderStreamConsumers(consumers) {
   });
 }
 
+/**
+ * Render message headers as a name/value grid.
+ * Accepts anything iterable as [key, value] pairs - a NATS Headers object from
+ * a live message, or Object.entries() of a stored stream message.
+ *
+ * @returns {HTMLElement|null} null when there are no headers to show
+ */
+function buildHeaderBlock(pairs) {
+  const entries = [...pairs];
+  if (entries.length === 0) return null;
+
+  const wrap = document.createElement("div");
+  wrap.className = "msg-headers";
+
+  const badge = document.createElement("span");
+  badge.className = "badge badge-hdr";
+  badge.textContent = `HEAD ${entries.length}`;
+  wrap.append(badge);
+
+  const grid = document.createElement("div");
+  grid.className = "hdr-grid";
+  entries.forEach(([key, value]) => {
+    const k = document.createElement("span");
+    k.className = "hdr-key";
+    k.textContent = key;
+    const v = document.createElement("span");
+    v.className = "hdr-value";
+    v.textContent = Array.isArray(value) ? value.join(", ") : value;
+    grid.append(k, v);
+  });
+
+  wrap.append(grid);
+  return wrap;
+}
+
 // Counter for unique stream message DOM ids (tail can redeliver the same seq
 // after a restart, so seq alone is not unique enough)
 let streamMsgCounter = 0;
@@ -362,15 +486,8 @@ function createStreamMsgDiv(m) {
   div.append(head, subject);
 
   if (m.headers) {
-    const hdr = document.createElement("div");
-    hdr.className = "msg-headers";
-    const badge = document.createElement("span");
-    badge.className = "badge badge-hdr";
-    badge.textContent = "HEAD";
-    const text = document.createElement("span");
-    text.textContent = " " + Object.entries(m.headers).map(([k, v]) => `${k}: ${v}`).join(", ");
-    hdr.append(badge, text);
-    div.append(hdr);
+    const hdr = buildHeaderBlock(Object.entries(m.headers));
+    if (hdr) div.append(hdr);
   }
 
   const body = document.createElement("div");
@@ -403,14 +520,26 @@ export function renderStreamMessages(msgs) {
   msgs.forEach((m) => els.streamMsgContainer.append(createStreamMsgDiv(m)));
 }
 
-/** Prepend a live-tail message (newest at top), pruning old entries. */
+/**
+ * Add a live-tail message, pruning old entries.
+ * Follows the same direction as the message log so both read the same way.
+ */
 export function appendStreamTailMessage(m) {
-  els.streamMsgContainer.querySelector(".empty")?.remove();
-  els.streamMsgContainer.prepend(createStreamMsgDiv(m));
+  const box = els.streamMsgContainer;
+  clearEmpty(box);
 
-  while (els.streamMsgContainer.children.length > MAX_TAIL_MESSAGES) {
-    els.streamMsgContainer.lastElementChild.remove();
+  const wasAtEdge = newestFirst
+    ? box.scrollTop <= 4
+    : box.scrollHeight - box.scrollTop - box.clientHeight <= 8;
+
+  if (newestFirst) box.prepend(createStreamMsgDiv(m));
+  else box.append(createStreamMsgDiv(m));
+
+  while (box.children.length > MAX_TAIL_MESSAGES) {
+    (newestFirst ? box.lastElementChild : box.firstElementChild).remove();
   }
+
+  if (wasAtEdge) box.scrollTop = newestFirst ? 0 : box.scrollHeight;
 }
 
 export function showTailPlaceholder() {
@@ -487,19 +616,8 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
   div.append(meta);
 
   if (msgHeaders) {
-    const list = [];
-    for (const [key, value] of msgHeaders) list.push(`${key}: ${value}`);
-    if (list.length > 0) {
-      const hdr = document.createElement("div");
-      hdr.className = "msg-headers";
-      const hb = document.createElement("span");
-      hb.className = "badge badge-hdr";
-      hb.textContent = "HEAD";
-      const ht = document.createElement("span");
-      ht.textContent = " " + list.join(", ");
-      hdr.append(hb, ht);
-      div.append(hdr);
-    }
+    const hdr = buildHeaderBlock(msgHeaders);
+    if (hdr) div.append(hdr);
   }
 
   const pre = document.createElement("pre");
@@ -520,20 +638,93 @@ function createMessageDiv(subject, data, isRpc, msgHeaders) {
   return div;
 }
 
+// Log order. Default is newest-at-the-bottom, matching `nats sub` and other
+// tail-style tools; the header badge toggles it and the choice is persisted.
+let newestFirst = false;
+
+// Messages that arrived while the user was scrolled away from the live edge
+let pendingNew = 0;
+
+/** Is the log scrolled to the end where new messages land? */
+function atLiveEdge() {
+  const el = els.messages;
+  if (newestFirst) return el.scrollTop <= 4;
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= 8;
+}
+
+function scrollToLiveEdge() {
+  els.messages.scrollTop = newestFirst ? 0 : els.messages.scrollHeight;
+}
+
+function setPendingNew(n) {
+  pendingNew = n;
+  els.jumpCount.textContent = n;
+  els.btnJumpLatest.hidden = n === 0;
+}
+
+/** Jump back to wherever new messages are arriving. */
+export function jumpToLatest() {
+  scrollToLiveEdge();
+  setPendingNew(0);
+}
+
+export function isNewestFirst() {
+  return newestFirst;
+}
+
+/**
+ * Set log direction. Existing entries are reversed in place so the visible
+ * order matches immediately instead of only applying to new messages.
+ */
+export function setNewestFirst(value, { reflow = true } = {}) {
+  newestFirst = !!value;
+
+  els.btnLogOrder.textContent = newestFirst ? "⬆ newest first" : "⬇ newest last";
+  els.btnLogOrder.title = newestFirst
+    ? "New messages arrive at the top - click for newest last"
+    : "New messages arrive at the bottom - click for newest first";
+
+  if (reflow) {
+    const entries = [...els.messages.children];
+    if (entries.length > 1) els.messages.replaceChildren(...entries.reverse());
+    scrollToLiveEdge();
+  }
+  setPendingNew(0);
+}
+
+/** Track whether the user has scrolled away from the live edge. */
+export function initializeLogScrollTracking() {
+  els.messages.addEventListener("scroll", () => {
+    if (atLiveEdge()) setPendingNew(0);
+  });
+  els.btnJumpLatest.addEventListener("click", jumpToLatest);
+}
+
 export function renderMessage(subject, data, isRpc = false, msgHeaders = null) {
   // RPC replies always render - they are a direct response to a user action
   if (isPaused && !isRpc) return;
 
   addToLogHistory(subject, data, isRpc, msgHeaders);
+  clearEmpty(els.messages);
 
   const div = createMessageDiv(subject, data, isRpc, msgHeaders);
-  const isAtTop = els.messages.scrollTop === 0;
+  const wasAtEdge = atLiveEdge();
 
-  els.messages.prepend(div);
-  if (isAtTop) els.messages.scrollTop = 0;
+  if (newestFirst) els.messages.prepend(div);
+  else els.messages.append(div);
 
+  // Prune from the far end so the newest entries always survive
   while (els.messages.children.length > MAX_VISIBLE_MESSAGES) {
-    els.messages.lastElementChild.remove();
+    (newestFirst ? els.messages.lastElementChild : els.messages.firstElementChild).remove();
+  }
+
+  // Stay pinned only if the user was already at the live edge, so scrolling
+  // back to read something is never interrupted by incoming traffic
+  if (wasAtEdge) {
+    scrollToLiveEdge();
+    setPendingNew(0);
+  } else if (!div.hidden) {
+    setPendingNew(pendingNew + 1);
   }
 }
 
@@ -545,7 +736,8 @@ export function toggleLogPause() {
 
 export function clearLogs() {
   logHistory.length = 0;
-  els.messages.replaceChildren();
+  setEmpty(els.messages, "No messages yet - subscribe to a subject to see traffic");
+  setPendingNew(0);
 }
 
 export function downloadLogs() {

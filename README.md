@@ -14,7 +14,8 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 *   **Stats:** Real-time RTT/Latency monitoring.
 
 ### Messaging (Pub/Sub)
-*   **Publish:** Send messages with payloads and Headers (JSON). `Ctrl + Enter` to send.
+*   **Publish:** Send messages with payloads and headers. `Ctrl + Enter` to send.
+*   **Headers:** Edited as name/value rows rather than raw JSON, and displayed in received messages as a two-column grid.
 *   **Subscribe:** Real-time message logging with JSON auto-formatting and syntax highlighting.
 *   **Request/Reply:** Perform RPC calls with configurable timeouts.
 *   **Message Templates:** Save subject/payload/headers combos as named templates - like a Postman collection for NATS.
@@ -23,6 +24,7 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
     *   **Click-to-Fill:** Click a subscription subject to immediately target it for publishing.
     *   **Local History:** Remembers recently used subjects.
     *   **Pause/Resume:** Pause the log flow to inspect high-traffic subjects.
+    *   **Log direction:** New messages arrive at the bottom by default, like `nats sub`. The badge in the log header flips this, and the choice is remembered. The view only auto-follows when you are already at the live edge - scroll up to read and a "N new" pill appears instead of yanking you away.
     *   **Binary-safe:** Non-UTF-8 payloads are detected and shown as a hex preview.
 
 ### JetStream KV Store

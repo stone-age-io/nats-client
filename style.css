@@ -28,6 +28,10 @@
   --danger: #f85149;
   --warn: #d29922;
 
+  /* Stone-Age.io brand indigo, sampled from the helpdesk icon. Logo only -
+     deliberately not part of the UI palette. */
+  --brand: #4f46e5;
+
   /* Spacing scale - use these, not arbitrary pixel values */
   --s1: 4px;
   --s2: 8px;
@@ -92,9 +96,11 @@ h3 {
 }
 
 .brand {
+  display: flex; align-items: center; gap: var(--s2);
   font-size: 0.95rem; font-weight: 700; color: #fff;
   letter-spacing: 0.5px; white-space: nowrap;
 }
+.brand-mark { width: 22px; height: 22px; flex-shrink: 0; display: block; }
 
 .bar-spacer { flex: 1; }
 
@@ -238,6 +244,16 @@ body[data-conn="reconnecting"] #statusText { color: var(--warn); }
 .composer { flex-shrink: 0; }
 .log-pane { flex: 1; min-height: 0; }
 
+/* Positioning context for the jump-to-latest pill */
+.log-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.jump-latest {
+  position: absolute; bottom: var(--s3); left: 50%; transform: translateX(-50%);
+  z-index: 5; padding: 5px 14px; border-radius: 100px;
+  background: var(--accent-solid); color: #fff; border: none;
+  font-size: 0.74rem; box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+}
+.jump-latest:hover { background: #388bfd; color: #fff; }
+
 .pane-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--s2);
@@ -272,12 +288,16 @@ body[data-conn="reconnecting"] #statusText { color: var(--warn); }
   padding: 0;
 }
 
+/* Also used as the log-direction toggle button, hence the pointer + hover */
 .hint {
   font-size: 0.62rem; color: var(--muted-dim);
+  background: transparent;
   border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
-  padding: 1px 5px; margin-left: var(--s1);
-  text-transform: none; letter-spacing: 0; cursor: help; white-space: nowrap;
+  padding: 1px 5px; margin-left: var(--s1); min-height: 0;
+  text-transform: none; letter-spacing: 0; cursor: pointer; white-space: nowrap;
+  font-weight: 600;
 }
+.hint:hover { color: var(--text); border-color: var(--muted-dim); background: transparent; }
 
 .pill-count {
   display: inline-block;
@@ -498,13 +518,36 @@ button.disclosure.sm {
   padding: var(--s3);
 }
 .composer-row #pubSubject { margin: 0; flex: 1; min-width: 0; }
+.composer-send { display: flex; gap: var(--s2); flex-shrink: 0; }
 
 .composer-body {
   display: flex; flex-direction: column;
   padding: 0 var(--s3) var(--s3);
 }
 .composer-body textarea { margin-bottom: 0; }
+
+/* Headers disclosure on the left, request timeout on the right - the timeout
+   only affects Req, so it does not belong on the subject line */
+.composer-opts {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3); margin-top: var(--s2); flex-wrap: wrap;
+}
+.inline-field {
+  display: flex; align-items: center; gap: var(--s1); margin: 0;
+  font-size: 0.72rem; color: var(--muted); font-weight: 600;
+}
+.inline-field .timeout { width: 64px; }
+
 .composer-body #headerContainer { margin-top: var(--s2); }
+
+.header-rows { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s2); }
+.header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: var(--s2); align-items: center;
+}
+.header-row input { margin: 0; }
+.header-row .header-remove { padding: 4px 8px; }
 
 /* --------------------------------------------------------------------------
    LISTS: subscriptions, buckets, keys, streams
@@ -612,7 +655,16 @@ button.disclosure.sm {
   display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap;
 }
 .msg-subject { color: #ddd; font-weight: 700; }
+
+/* Headers render as a name/value grid rather than a comma-joined line */
 .msg-headers { margin-top: var(--s1); font-size: 0.75em; color: var(--muted); }
+.hdr-grid {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--s3); margin-top: var(--s1); padding-left: var(--s1);
+  border-left: 2px solid var(--border-soft);
+}
+.hdr-key { color: var(--muted); white-space: nowrap; }
+.hdr-value { color: #c9d1d9; word-break: break-word; }
 
 .badge {
   padding: 2px 6px; border-radius: 10px; font-weight: 600;
@@ -802,12 +854,18 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
   }
 
   .pane { height: auto; }
-  .pane-list .list-scroll { max-height: 220px; }
-  .log-pane .list-scroll { height: 420px; }
   .pane-detail { min-height: 480px; }
   .detail-body { height: auto; }
   .subtab-panel { min-height: 320px; }
-  .value-view, .value-edit { min-height: 240px; }
+
+  /* `flex: 1 1 0` collapses to nothing once the pane is height:auto, so scroll
+     regions have to opt out of flex sizing and state their own bounds here */
+  .list-scroll { flex: none; height: auto; }
+  .pane-list .list-scroll { min-height: 96px; max-height: 260px; }
+  .log-pane .list-scroll { min-height: 340px; max-height: 60vh; }
+  #consumerList, #streamMsgContainer { min-height: 260px; max-height: 60vh; }
+  .log-wrap { flex: none; }
+  .value-view, .value-edit { flex: none; height: 260px; }
 
   .detail-head { flex-direction: column; align-items: stretch; gap: var(--s2); }
 
@@ -819,8 +877,26 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
   .mini-toolbar { flex-wrap: wrap; }
   .mini-toolbar .push-right { margin-left: 0; flex: 1 1 100%; }
 
+  /* Composer: subject gets its own line, Pub/Req split the next one */
+  .composer-row { flex-wrap: wrap; }
+  .composer-row #pubSubject { flex: 1 1 100%; }
+  .composer-send { flex: 1 1 100%; }
+  .composer-send button { flex: 1; }
+
+  /* Keep the template controls together on one line under the title
+     instead of orphaning the delete button on a third row */
+  .composer .pane-head { flex-wrap: wrap; }
+  .composer .pane-head .pane-actions { flex: 1 1 100%; flex-wrap: nowrap; justify-content: flex-end; }
+  .composer .pane-head .bar-select { flex: 1; max-width: none; }
+
+  /* Header rows stack key over value so neither is squeezed */
+  .header-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .header-row .header-value { grid-column: 1 / -1; }
+  .hdr-grid { grid-template-columns: minmax(0, 1fr); gap: 0 0; }
+  .hdr-key { margin-top: var(--s1); }
+
   /* 16px prevents iOS zoom-on-focus */
   input, textarea, select { font-size: 16px; }
-  button, .tab { min-height: 40px; }
+  button:not(.hint):not(.copy-btn):not(.disclosure), .tab { min-height: 40px; }
   .subtab { min-height: 38px; }
 }

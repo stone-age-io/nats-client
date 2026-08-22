@@ -16,6 +16,7 @@ const KEYS = {
   PROFILES: "nats_profiles",
   TEMPLATES: "nats_msg_templates",
   SAVED_SUBS: "nats_saved_subs",
+  LOG_NEWEST_FIRST: "nats_log_newest_first",
 };
 
 // ============================================================================
@@ -212,6 +213,19 @@ export function removeSavedSubscription(url, subject) {
     if (all[url].length === 0) delete all[url];
     saveJson(KEYS.SAVED_SUBS, all);
   }
+}
+
+// ============================================================================
+// LOG ORDER PREFERENCE
+// ============================================================================
+// false (default) = newest at the bottom, like `nats sub` and other tail tools
+
+export function getLogNewestFirst() {
+  return localStorage.getItem(KEYS.LOG_NEWEST_FIRST) === "true";
+}
+
+export function setLogNewestFirst(newestFirst) {
+  localStorage.setItem(KEYS.LOG_NEWEST_FIRST, String(!!newestFirst));
 }
 
 // ============================================================================

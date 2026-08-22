@@ -50,7 +50,9 @@ export const els = {
   pubPayload: $("pubPayload"),
   btnHeaderToggle: $("btnHeaderToggle"),
   headerContainer: $("headerContainer"),
-  pubHeaders: $("pubHeaders"),
+  headerRows: $("headerRows"),
+  headerCount: $("headerCount"),
+  btnHeaderAdd: $("btnHeaderAdd"),
   reqTimeout: $("reqTimeout"),
   btnPub: $("btnPub"),
   btnReq: $("btnReq"),
@@ -61,6 +63,9 @@ export const els = {
   btnPause: $("btnPause"),
   btnClear: $("btnClear"),
   btnDownloadLogs: $("btnDownloadLogs"),
+  btnLogOrder: $("btnLogOrder"),
+  btnJumpLatest: $("btnJumpLatest"),
+  jumpCount: $("jumpCount"),
 
   // --- KV: buckets ----------------------------------------------------------
   kvBucketList: $("kvBucketList"),
