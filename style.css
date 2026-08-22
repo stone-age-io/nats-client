@@ -100,7 +100,8 @@ h3 {
   font-size: 0.95rem; font-weight: 700; color: #fff;
   letter-spacing: 0.5px; white-space: nowrap;
 }
-.brand-mark { width: 22px; height: 22px; flex-shrink: 0; display: block; }
+/* currentColor so the mark can be retinted per theme, like the helpdesk component */
+.brand-mark { width: 22px; height: 22px; flex-shrink: 0; display: block; color: var(--brand); }
 
 .bar-spacer { flex: 1; }
 

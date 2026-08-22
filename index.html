@@ -25,11 +25,13 @@
       <!--
         Stone-Age.io mark, same path as helpdesk ui/src/components/BrandLogo.vue.
         The inner subpath winds against the outer circle, so the nonzero fill
-        rule knocks out the interior; the white disc behind it fills the hole.
+        rule knocks the interior out - left transparent on purpose so the panel
+        shows through, exactly as the source component renders it. Do not put a
+        disc behind it; the opaque white in the PWA icons is only there because
+        launcher icons sit on backgrounds we do not control.
       -->
-      <svg class="brand-mark" viewBox="0 0 256 256" role="img" aria-label="Stone Age NATS Client">
-        <circle cx="128" cy="128" r="128" fill="#fff"/>
-        <path fill="var(--brand)" d="M128,0 C57.343,0 0,57.343 0,128 C0,198.657 57.343,256 128,256 C198.657,256 256,198.657 256,128 C256,57.343 198.657,0 128,0 z M128,28 C181.423,28 224.757,71.334 224.757,124.757 C224.757,139.486 221.04,153.32 214.356,165.42 C198.756,148.231 178.567,138.124 162.876,124.331 C155.723,124.214 128.543,124.043 113.254,124.043 C113.254,147.334 113.254,172.064 113.254,190.513 C100.456,179.347 94.543,156.243 94.543,156.243 C83.432,147.065 31.243,124.757 31.243,124.757 C31.243,71.334 74.577,28 128,28 z"/>
+      <svg class="brand-mark" viewBox="0 0 256 256" fill="currentColor" role="img" aria-label="Stone Age NATS Client">
+        <path d="M128,0 C57.343,0 0,57.343 0,128 C0,198.657 57.343,256 128,256 C198.657,256 256,198.657 256,128 C256,57.343 198.657,0 128,0 z M128,28 C181.423,28 224.757,71.334 224.757,124.757 C224.757,139.486 221.04,153.32 214.356,165.42 C198.756,148.231 178.567,138.124 162.876,124.331 C155.723,124.214 128.543,124.043 113.254,124.043 C113.254,147.334 113.254,172.064 113.254,190.513 C100.456,179.347 94.543,156.243 94.543,156.243 C83.432,147.065 31.243,124.757 31.243,124.757 C31.243,71.334 74.577,28 128,28 z"/>
       </svg>
       NATS
     </div>
