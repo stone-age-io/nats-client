@@ -17,6 +17,7 @@ const KEYS = {
   TEMPLATES: "nats_msg_templates",
   SAVED_SUBS: "nats_saved_subs",
   LOG_NEWEST_FIRST: "nats_log_newest_first",
+  PANE_SIZES: "nats_pane_sizes",
 };
 
 // ============================================================================
@@ -226,6 +227,32 @@ export function getLogNewestFirst() {
 
 export function setLogNewestFirst(newestFirst) {
   localStorage.setItem(KEYS.LOG_NEWEST_FIRST, String(!!newestFirst));
+}
+
+// ============================================================================
+// PANE SIZES
+// ============================================================================
+// Shape: { msg: { "0": 320 }, kv: { "0": 180, "1": 300 } }
+// Keyed by the grid's data-panes group, then by column index. A column the
+// user has never dragged is simply absent, so it keeps the CSS default and
+// picks up any future change to that default.
+
+export function getPaneSizes() {
+  return loadJson(KEYS.PANE_SIZES, {});
+}
+
+/** Pass width = null to forget the override and fall back to the CSS default. */
+export function setPaneSize(group, index, width) {
+  const all = loadJson(KEYS.PANE_SIZES, {});
+  const cols = all[group] || {};
+
+  if (width == null) delete cols[index];
+  else cols[index] = Math.round(width);
+
+  if (Object.keys(cols).length === 0) delete all[group];
+  else all[group] = cols;
+
+  saveJson(KEYS.PANE_SIZES, all);
 }
 
 // ============================================================================

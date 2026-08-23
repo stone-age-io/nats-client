@@ -216,15 +216,80 @@ body[data-conn="reconnecting"] #statusText { color: var(--warn); }
 
 .tab-panel { height: 100%; min-height: 0; }
 
+/* Column widths are custom properties so a splitter can override one without
+   the JS having to know the rest of the template. The fallback in each
+   `var()` IS the default layout - it stays declared here, in CSS.
+   Gap is 0 because the splitter track supplies the gutter itself.
+
+   Each width is wrapped in clamp() so the bounds are enforced by layout, not
+   by a resize handler: a saved width that no longer fits is corrected the
+   moment the grid is measured, whether that is a window resize, a tab being
+   revealed, or a reload at a narrower size. The stored value is left alone,
+   so widening the window restores what the user actually asked for.
+   MIN_COL / MIN_FLEX in splitters.js mirror these two. */
 .panes {
   display: grid;
-  gap: var(--s3);
+  gap: 0;
   height: 100%;
   min-height: 0;
+  --gutter: var(--s3);
+  --min-col: 140px;   /* below this a pane head clips its buttons */
+  --min-flex: 280px;  /* the last column never gets squeezed past this */
 }
-.panes-msg    { grid-template-columns: 260px 1fr; }
-.panes-kv     { grid-template-columns: 200px 240px 1fr; }
-.panes-stream { grid-template-columns: 240px 1fr; }
+
+.panes-msg {
+  grid-template-columns:
+    clamp(var(--min-col), var(--c0, 260px), calc(100% - var(--gutter) - var(--min-flex)))
+    var(--gutter)
+    minmax(0, 1fr);
+}
+.panes-stream {
+  grid-template-columns:
+    clamp(var(--min-col), var(--c0, 240px), calc(100% - var(--gutter) - var(--min-flex)))
+    var(--gutter)
+    minmax(0, 1fr);
+}
+/* Two resizable columns, so each one's ceiling has to account for the other */
+.panes-kv {
+  grid-template-columns:
+    clamp(var(--min-col), var(--c0, 200px), calc(100% - var(--gutter) * 2 - var(--c1, 240px) - var(--min-flex)))
+    var(--gutter)
+    clamp(var(--min-col), var(--c1, 240px), calc(100% - var(--gutter) * 2 - var(--c0, 200px) - var(--min-flex)))
+    var(--gutter)
+    minmax(0, 1fr);
+}
+
+/* --------------------------------------------------------------------------
+   SPLITTERS
+   A splitter occupies the gutter track between two panes and writes the
+   width of the pane on its left into --c{data-col} on the grid.
+   -------------------------------------------------------------------------- */
+
+.splitter {
+  position: relative;
+  cursor: col-resize;
+  /* the pointer drag must not scroll the page out from under it */
+  touch-action: none;
+}
+
+/* The grab line is a 4px bar centred in the 12px gutter, so the visible
+   spacing between panes is identical to the old fixed-gap layout. */
+.splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0 calc(50% - 2px);
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.splitter:hover::before,
+.splitter:focus-visible::before { background: var(--accent-solid); }
+.splitter.dragging::before      { background: var(--accent); }
+.splitter:focus-visible         { outline: none; }
+
+/* While dragging, the cursor and the no-select need to survive leaving the
+   4px handle - pointer capture keeps the events, this keeps the feedback. */
+body.resizing { cursor: col-resize; user-select: none; }
 
 .pane {
   background: var(--panel);
@@ -833,7 +898,14 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
 
 /* Narrow desktop: drop the KV bucket column width, tighten panes */
 @media (max-width: 1200px) {
-  .panes-kv { grid-template-columns: 170px 200px 1fr; }
+  .panes-kv {
+    grid-template-columns:
+      clamp(var(--min-col), var(--c0, 170px), calc(100% - var(--gutter) * 2 - var(--c1, 200px) - var(--min-flex)))
+      var(--gutter)
+      clamp(var(--min-col), var(--c1, 200px), calc(100% - var(--gutter) * 2 - var(--c0, 170px) - var(--min-flex)))
+      var(--gutter)
+      minmax(0, 1fr);
+  }
   .pane-filter.inline { width: 110px; }
 }
 
@@ -848,11 +920,15 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
   .workspace { overflow: visible; height: auto; }
   .tab-panel { height: auto; }
 
+  /* Stacked panes have nothing to drag between, so the splitters go away and
+     the grid takes its gutter back as a plain row gap. */
   .panes,
   .panes-msg, .panes-kv, .panes-stream {
     grid-template-columns: 1fr;
+    gap: var(--s3);
     height: auto;
   }
+  .splitter { display: none; }
 
   .pane { height: auto; }
   .pane-detail { min-height: 480px; }

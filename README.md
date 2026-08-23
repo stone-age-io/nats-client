@@ -90,8 +90,11 @@ Open your browser to `http://localhost:5173`.
 3.  (Optional) Enter a token, user/pass, or upload a `.creds` file.
 4.  Click **Connect**. The popover closes and the pill shows the host and RTT.
 
-Save the current settings as a named profile with **Save profile**; the profile
-dropdown sits next to the logo for one-click switching between servers.
+The **Profile** dropdown at the top of the popover switches servers - picking
+one fills in the URL and auth below it. **Save profile** stores whatever is
+currently in the form under a name. Every connection control lives in this one
+popover, and the pill shows the active profile name (falling back to the host)
+so you can tell prod from staging without opening it.
 
 ### Messaging Tab
 *   **Subscribe:** type a subject in the left pane and press Enter. Click a
@@ -131,21 +134,27 @@ scrolling anywhere in the app.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│ NATS 🪨   [profile ▾]        ● Connected · host · 138ms   Server │  app bar
+│ NATS 🪨                      ● Connected · prod · 138ms   Server │  app bar
 ├─────────────────────────────────────────────────────────────────┤
 │ Messaging │ KV Store │ Streams                                  │  tabs
-├──────────────┬──────────────────────────────────────────────────┤
-│ Subscriptions│ Publish / Request  (collapsible)                 │
-│              ├──────────────────────────────────────────────────┤
-│              │ Message Log                                      │
-└──────────────┴──────────────────────────────────────────────────┘
+├──────────────╥──────────────────────────────────────────────────┤
+│ Subscriptions║ Publish / Request  (collapsible)                 │
+│              ║──────────────────────────────────────────────────┤
+│              ║ Message Log                                      │
+└──────────────╨──────────────────────────────────────────────────┘
+                ↕ drag to resize
 
-KV Store:  Buckets │ Keys │ key detail ─ [ Value | History ]
-Streams:   Streams │ stream detail ─ [ Overview | Consumers | Messages ]
+KV Store:  Buckets ║ Keys ║ key detail ─ [ Value | History ]
+Streams:   Streams ║ stream detail ─ [ Overview | Consumers | Messages ]
 ```
 
 *   **Connection** lives in a popover behind the status pill, not in a permanent
     sidebar - it is a once-per-session task, so it does not hold screen space.
+    Profile selection is in there too, so connecting is one surface, not two.
+*   **Column widths are draggable.** Every `║` above is a splitter; drag it,
+    or focus it and use the arrow keys (hold Shift for bigger steps).
+    Double-click or press Home to go back to the default. Widths are saved per
+    tab. Splitters disappear below 900px, where panes stack.
 *   **Subscriptions** live inside the Messaging tab, where they are actually
     used, and get the full height of the window.
 *   **Detail sub-tabs** give consumers, stored messages and revision history a
@@ -169,6 +178,7 @@ Designed to be easily readable and hackable.
 ├── nats-client.js    # The engine. Wraps nats.ws and @nats-io/kv.
 ├── ui.js             # The painter. DOM updates, toasts, tabs, connection state.
 ├── dialogs.js        # The interruptions. Every modal, built on native <dialog>.
+├── splitters.js      # The rulers. Draggable pane columns, persisted per tab.
 ├── dom.js            # The map. Centralized references to HTML elements.
 └── utils.js          # The tools. Formatters, validators, history helpers.
 ```
@@ -190,6 +200,16 @@ break the dark theme with a browser-chrome popup.
 
 Dialogs settle synchronously when dismissed rather than waiting on the `close`
 event, so a caller's `await` never depends on event delivery timing.
+
+### Splitters
+
+Each `.panes` grid declares its columns as
+`clamp(--min-col, var(--c0, 260px), <space left over>)`, so the default layout
+and the size limits both stay in CSS. `splitters.js` only ever writes `--c0`,
+`--c1`, ... onto the grid element - it never knows a template. Two consequences
+worth keeping: a saved width that no longer fits is corrected by layout rather
+than by a resize handler (so it also holds on reload and on tab reveal), and
+the original width is kept in storage, so widening the window brings it back.
 
 ## Contributing
 

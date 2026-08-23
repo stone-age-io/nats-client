@@ -14,6 +14,7 @@ import * as ui from "./ui.js";
 import * as nats from "./nats-client.js";
 import * as storage from "./storage.js";
 import * as dlg from "./dialogs.js";
+import { initPaneSplitters } from "./splitters.js";
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -76,6 +77,7 @@ function initializeApp() {
   setupConsumerEventDelegation();
   setupHeaderEditor();
   setupConnPopover();
+  initPaneSplitters();
 
   refreshHistoryUi();
   refreshProfileUi();
@@ -351,6 +353,7 @@ function handleProfileChange() {
   const profile = storage.getProfile(els.profileSelect.value);
   appState.profileCredsText = null;
   els.credsHint.hidden = true;
+  ui.setActiveProfile(els.profileSelect.value);
 
   if (!profile) return;
 
@@ -398,6 +401,7 @@ async function handleProfileSave() {
   storage.saveProfile(profile);
   refreshProfileUi();
   els.profileSelect.value = profile.name;
+  ui.setActiveProfile(profile.name);
   ui.showToast(`Profile '${profile.name}' saved${saveCreds ? " (with credentials)" : ""}`, "success");
 }
 
@@ -421,6 +425,7 @@ async function handleProfileDelete() {
   els.credsHint.hidden = true;
   refreshProfileUi();
   els.profileSelect.value = "";
+  ui.setActiveProfile("");
   ui.showToast(`Profile '${name}' deleted`, "info");
 }
 

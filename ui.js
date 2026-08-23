@@ -829,6 +829,29 @@ function shortHost(url) {
   }
 }
 
+// What the pill shows next to the dot. The profile name beats the host:
+// deciding whether it is safe to publish is easier from `prod` than from
+// `mq.internal.example.com`. The full URL stays in the tooltip.
+let activeProfile = "";
+let pillUrl = null;
+
+function renderConnLabel() {
+  els.statusHost.textContent = activeProfile || (pillUrl ? shortHost(pillUrl) : "");
+  // A profile name on the pill displaces the host, so keep the full URL
+  // reachable without opening the popover.
+  els.btnConnStatus.title = pillUrl ? `Connected to ${pillUrl}` : "Connection settings";
+}
+
+/**
+ * Name of the profile selected in the connection popover, or "" for none.
+ * The popover is behind the pill, so the pill has to carry this - it is the
+ * only place the active profile is visible once the popover closes.
+ */
+export function setActiveProfile(name) {
+  activeProfile = name || "";
+  renderConnLabel();
+}
+
 /**
  * Reflect connection state across the whole app.
  *
@@ -854,13 +877,15 @@ export function setConnectionState(state, url = null) {
   els.statusDot.className = "status-dot" +
     (connected ? " connected" : state === "reconnecting" ? " reconnecting" : "");
 
-  if (connected && url) els.statusHost.textContent = shortHost(url);
+  if (connected && url) pillUrl = url;
 
   if (state === "disconnected") {
-    els.statusHost.textContent = "";
+    pillUrl = null;
     els.rttLabel.textContent = "";
     clearSubscriptions();
   }
+
+  renderConnLabel();
 
   document.querySelectorAll("[data-requires-conn]").forEach((el) => {
     el.disabled = !connected;

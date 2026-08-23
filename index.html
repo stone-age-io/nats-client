@@ -36,10 +36,6 @@
       NATS
     </div>
 
-    <select id="profileSelect" class="bar-select" title="Connection profile" aria-label="Connection profile">
-      <option value="">-- No Profile --</option>
-    </select>
-
     <div class="bar-spacer"></div>
 
     <button id="btnConnStatus" class="conn-pill" popovertarget="connPopover" aria-haspopup="dialog">
@@ -64,6 +60,11 @@
         <button id="btnProfileDelete" class="sm-btn danger" title="Delete the selected profile">&#10005;</button>
       </div>
     </div>
+
+    <label for="profileSelect">Profile</label>
+    <select id="profileSelect" title="Connection profile">
+      <option value="">-- No Profile --</option>
+    </select>
 
     <label for="serverUrl">Server URL</label>
     <input type="text" id="serverUrl" list="urlHistory" value="ws://localhost:9222"
@@ -105,7 +106,7 @@
     <!-- MESSAGING                                                          -->
     <!-- ================================================================== -->
     <section class="tab-panel" data-tab-panel="msg" id="panel-msg" role="tabpanel">
-      <div class="panes panes-msg">
+      <div class="panes panes-msg" data-panes="msg">
 
         <div class="pane pane-list">
           <div class="pane-head">
@@ -118,6 +119,9 @@
           </div>
           <ul id="subList" class="list-scroll"></ul>
         </div>
+
+        <div class="splitter" data-col="0" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize Subscriptions pane"></div>
 
         <div class="pane-main">
 
@@ -196,7 +200,7 @@
     <!-- KV STORE                                                           -->
     <!-- ================================================================== -->
     <section class="tab-panel" data-tab-panel="kv" id="panel-kv" role="tabpanel" hidden>
-      <div class="panes panes-kv">
+      <div class="panes panes-kv" data-panes="kv">
 
         <div class="pane pane-list">
           <div class="pane-head">
@@ -211,6 +215,9 @@
           <div id="kvBucketList" class="list-scroll"><div class="empty">Not connected</div></div>
         </div>
 
+        <div class="splitter" data-col="0" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize Buckets pane"></div>
+
         <div class="pane pane-list">
           <div class="pane-head">
             <h3 id="kvBucketLabel">Keys</h3>
@@ -223,6 +230,9 @@
                  autocorrect="off" autocapitalize="off" spellcheck="false" />
           <div id="kvKeyList" class="list-scroll"><div class="empty">Select a bucket</div></div>
         </div>
+
+        <div class="splitter" data-col="1" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize Keys pane"></div>
 
         <div class="pane pane-detail">
           <div id="kvEmptyState" class="empty empty-fill">Select a bucket to browse keys</div>
@@ -276,7 +286,7 @@
     <!-- STREAMS                                                            -->
     <!-- ================================================================== -->
     <section class="tab-panel" data-tab-panel="stream" id="panel-stream" role="tabpanel" hidden>
-      <div class="panes panes-stream">
+      <div class="panes panes-stream" data-panes="stream">
 
         <div class="pane pane-list">
           <div class="pane-head">
@@ -290,6 +300,9 @@
                  autocorrect="off" autocapitalize="off" spellcheck="false" />
           <div id="streamList" class="list-scroll"><div class="empty">Not connected</div></div>
         </div>
+
+        <div class="splitter" data-col="0" role="separator" tabindex="0"
+             aria-orientation="vertical" aria-label="Resize Streams pane"></div>
 
         <div class="pane pane-detail">
           <div id="streamEmptyState" class="empty empty-fill">Select a stream to view details</div>
