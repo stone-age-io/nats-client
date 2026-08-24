@@ -837,9 +837,10 @@ let pillUrl = null;
 
 function renderConnLabel() {
   els.statusHost.textContent = activeProfile || (pillUrl ? shortHost(pillUrl) : "");
-  // A profile name on the pill displaces the host, so keep the full URL
-  // reachable without opening the popover.
-  els.btnConnStatus.title = pillUrl ? `Connected to ${pillUrl}` : "Connection settings";
+  // The pill shows one of the two and may ellipse it, so the tooltip carries
+  // both in full.
+  const detail = [activeProfile, pillUrl].filter(Boolean).join(" — ");
+  els.btnConnStatus.title = detail || "Connection settings";
 }
 
 /**

@@ -117,7 +117,12 @@ h3 {
 }
 .bar-select.sm { max-width: 150px; }
 
-/* Connection status pill - opens the connection popover */
+/* Connection status pill - opens the connection popover.
+   The server/profile name is the only part that can be arbitrarily long, so
+   it is the only part allowed to give: it ellipses into whatever room is
+   left while the state, RTT and caret keep their size. `min-width: 0` is what
+   makes that possible - without it the nowrap contents set a floor and the
+   whole pill wraps onto its own row rather than shrinking. */
 .conn-pill {
   display: flex; align-items: center; gap: var(--s2);
   background: var(--input-bg);
@@ -129,9 +134,20 @@ h3 {
   color: var(--text);
   font-weight: 500;
   transition: border-color 0.15s, background 0.15s;
+  min-width: 0;
+  max-width: 360px;
 }
+.conn-pill > *:not(.conn-host) { flex-shrink: 0; }
 .conn-pill:hover { background: #21262d; border-color: var(--muted); }
-.conn-host { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+
+.conn-host {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .conn-rtt  { font-family: var(--mono); font-size: 0.7rem;  color: var(--muted-dim); }
 .conn-caret { color: var(--muted-dim); font-size: 0.65rem; }
 
@@ -915,6 +931,12 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
 
   .app-bar { flex-wrap: wrap; height: auto; padding: var(--s2) var(--s3); }
   .bar-spacer { display: none; }
+
+  /* Flex breaks lines on content size before it shrinks anything, so a long
+     name pushes the whole pill onto a line of its own no matter how willing
+     that name is to ellipse. Basing the pill at 0 makes it always fit the
+     current line and then grow into whatever is left, up to the cap above. */
+  .conn-pill { flex: 1 1 0; }
   .conn-popover { top: auto; bottom: var(--s3); left: var(--s3); right: var(--s3); width: auto; }
 
   .workspace { overflow: visible; height: auto; }
@@ -976,4 +998,14 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
   input, textarea, select { font-size: 16px; }
   button:not(.hint):not(.copy-btn):not(.disclosure), .tab { min-height: 40px; }
   .subtab { min-height: 38px; }
+}
+
+/* Phones: brand + pill will not both fit alongside Server info and still
+   leave the name a readable amount of room, so Server info takes its own
+   row and the pill spends the whole of the first one. Above this width all
+   three fit on one line, and forcing the split would just leave a stretched
+   full-width button. */
+@media (max-width: 480px) {
+  .conn-pill { max-width: none; }
+  #btnInfo { flex: 1 1 100%; }
 }

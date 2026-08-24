@@ -94,7 +94,9 @@ The **Profile** dropdown at the top of the popover switches servers - picking
 one fills in the URL and auth below it. **Save profile** stores whatever is
 currently in the form under a name. Every connection control lives in this one
 popover, and the pill shows the active profile name (falling back to the host)
-so you can tell prod from staging without opening it.
+so you can tell prod from staging without opening it. A long name ellipses -
+it is the only part of the pill that gives, so the state and RTT stay put -
+and the tooltip carries the name and the full URL.
 
 ### Messaging Tab
 *   **Subscribe:** type a subject in the left pane and press Enter. Click a
