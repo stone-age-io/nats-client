@@ -332,7 +332,12 @@ body.resizing { cursor: col-resize; user-select: none; }
    points the way the click will actually travel. Newest-first puts that end
    at the top - see .at-top below. */
 .jump-latest {
-  position: absolute; bottom: var(--s3); left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: var(--s3);
+  /* Centred with auto margins, not translateX(-50%): the press effect on
+     button:active sets its own transform, which would replace the centering
+     and throw the pill half its width to the right on mousedown - far enough
+     that the mouseup lands outside it and the click never registers. */
+  left: 0; right: 0; margin-inline: auto; width: fit-content;
   z-index: 5; padding: 5px 14px; border-radius: 100px;
   background: var(--accent-solid); color: #fff; border: none;
   font-size: 0.74rem; box-shadow: 0 4px 14px rgba(0,0,0,0.5);
