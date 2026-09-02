@@ -8,17 +8,33 @@
 // JSON UTILITIES
 // ============================================================================
 
-export function beautify(el) {
+/**
+ * Pretty-print a textarea's contents as JSON, in place.
+ *
+ * Returns null on success, or the parse error to report. NATS payloads and KV
+ * values are arbitrary bytes - a bare string or number is a perfectly good
+ * message - so "not JSON" is something to answer when asked, never an error
+ * state to flag while someone is typing.
+ *
+ * @param {HTMLTextAreaElement|HTMLInputElement} el
+ * @returns {string|null} - Error message, or null if it formatted
+ */
+export function formatJson(el) {
   const val = el.value.trim();
-  if (!val) return;
-  try { 
-    const obj = JSON.parse(val); 
-    el.value = JSON.stringify(obj, null, 2); 
-  } catch (e) { 
-    // Ignore invalid JSON - user might still be typing
+  if (!val) return "Nothing to format";
+  try {
+    el.value = JSON.stringify(JSON.parse(val), null, 2);
+    return null;
+  } catch (e) {
+    return e.message;
   }
 }
 
+/**
+ * Flag a field red when it is not JSON. Only for inputs where JSON is the
+ * required format - stream/consumer/bucket configs - never for free-form
+ * message payloads. See formatJson above.
+ */
 export function validateJsonInput(el) {
   const val = el.value.trim();
   if (!val) {

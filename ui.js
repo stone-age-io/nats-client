@@ -148,7 +148,7 @@ export function renderNamedOptions(selectEl, items, placeholder) {
 // SUBSCRIPTIONS
 // ============================================================================
 
-export function addSubscription(id, subject) {
+export function addSubscription(id, subject, excludeSystem = false) {
   clearEmpty(els.subList);
 
   const li = document.createElement("li");
@@ -157,6 +157,19 @@ export function addSubscription(id, subject) {
   const span = document.createElement("span");
   span.title = "Click to copy into the Publish subject";
   span.textContent = subject;
+  // The badge below lives inside this span, so the click handler reads the
+  // subject from here rather than from the rendered text
+  span.dataset.subject = subject;
+
+  // The subject alone no longer says what the subscription delivers, so a
+  // filtered one is labelled - otherwise missing $JS traffic looks like a bug
+  if (excludeSystem) {
+    const tag = document.createElement("em");
+    tag.className = "sub-tag";
+    tag.title = "System subjects ($JS, $SYS, $KV, _INBOX...) are hidden";
+    tag.textContent = "no sys";
+    span.append(" ", tag);
+  }
 
   const btn = document.createElement("button");
   btn.className = "danger";

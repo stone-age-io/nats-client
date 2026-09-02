@@ -132,9 +132,11 @@ function setupSubscriptionEventDelegation() {
       if (!isNaN(subId)) handleUnsubscribe(subId);
       return;
     }
-    // Click the subject to target it for publishing
-    if (e.target.tagName === "SPAN") {
-      els.pubSubject.value = e.target.textContent;
+    // Click the subject to target it for publishing. closest() rather than a
+    // tag check so the filter badge nested in the span is not a dead zone
+    const label = e.target.closest("span[data-subject]");
+    if (label) {
+      els.pubSubject.value = label.dataset.subject;
       ui.switchTab("msg");
       els.pubSubject.focus();
     }
@@ -445,16 +447,21 @@ els.creds.addEventListener("change", () => {
 /**
  * Subscribe to a subject and add it to the UI
  * @param {string} subj - Subject to subscribe to
+ * @param {boolean} excludeSystem - Drop $SYS/$JS/$KV/_INBOX traffic
  * @param {boolean} quiet - Suppress the success toast (used during bulk restore)
+ * @returns {boolean} - Whether the exclusion actually applies to this pattern
  */
-function subscribeTo(subj, quiet = false) {
-  const { id, subject, size } = nats.subscribe(subj, (s, data, isRpc, headers) => {
+function subscribeTo(subj, excludeSystem = false, quiet = false) {
+  const res = nats.subscribe(subj, (s, data, isRpc, headers) => {
     ui.renderMessage(s, data, isRpc, headers);
-  });
+  }, { excludeSystem });
 
-  ui.addSubscription(id, subject);
-  ui.updateSubCount(size);
-  if (!quiet) ui.showToast(`Subscribed to ${subject}`, "success");
+  ui.addSubscription(res.id, res.subject, res.excludeSystem);
+  ui.updateSubCount(res.size);
+  if (!quiet) {
+    ui.showToast(`Subscribed to ${res.subject}${res.excludeSystem ? " (system subjects hidden)" : ""}`, "success");
+  }
+  return res.excludeSystem;
 }
 
 function restoreSubscriptions(url) {
@@ -462,12 +469,12 @@ function restoreSubscriptions(url) {
   if (saved.length === 0) return;
 
   let count = 0;
-  for (const subj of saved) {
+  for (const { subject, excludeSystem } of saved) {
     try {
-      subscribeTo(subj, true);
+      subscribeTo(subject, excludeSystem, true);
       count++;
     } catch (err) {
-      console.error(`Failed to restore subscription '${subj}':`, err);
+      console.error(`Failed to restore subscription '${subject}':`, err);
     }
   }
   if (count > 0) ui.showToast(`Restored ${count} subscription${count > 1 ? "s" : ""}`, "info");
@@ -481,13 +488,33 @@ function handleSubscribe() {
     storage.addSubjectToHistory(subj);
     refreshHistoryUi();
 
-    subscribeTo(subj);
-    if (appState.connectedUrl) storage.addSavedSubscription(appState.connectedUrl, subj);
+    // Save what the subscription is really doing, not what was ticked: on a
+    // pattern like $JS.> the box is inert and restoring it must stay inert
+    const applied = subscribeTo(subj, els.excludeSystemChk.checked);
+    if (appState.connectedUrl) {
+      storage.addSavedSubscription(appState.connectedUrl, subj, applied);
+    }
     els.subSubject.value = "";
+    syncExcludeSystemRow();
   } catch (err) {
     console.error("Subscribe error:", err);
     ui.showToast(err.message, "error");
   }
+}
+
+/**
+ * Grey the option out on patterns it cannot affect, so an inert checkbox never
+ * looks like a promise the subscription is not keeping.
+ */
+function syncExcludeSystemRow() {
+  const subj = els.subSubject.value.trim();
+  const usable = !subj || nats.canExcludeSystem(subj);
+
+  els.excludeSystemChk.disabled = !usable;
+  els.excludeSystemRow.classList.toggle("is-disabled", !usable);
+  els.excludeSystemRow.title = usable
+    ? ""
+    : "Only applies to wildcard subjects like > or *.foo";
 }
 
 function handleUnsubscribe(id) {
@@ -508,6 +535,13 @@ els.btnSub.addEventListener("click", handleSubscribe);
 els.subSubject.addEventListener("keyup", (e) => {
   if (e.key === "Enter") handleSubscribe();
 });
+els.subSubject.addEventListener("input", syncExcludeSystemRow);
+
+els.excludeSystemChk.checked = storage.getExcludeSystem();
+els.excludeSystemChk.addEventListener("change", () => {
+  storage.setExcludeSystem(els.excludeSystemChk.checked);
+});
+syncExcludeSystemRow();
 
 // ============================================================================
 // PUBLISH / REQUEST HANDLERS
@@ -557,11 +591,17 @@ async function handleRequest() {
   }
 }
 
-/** Collapse the composer down to the subject line so the log gets the space. */
+/**
+ * Collapse the composer to its title bar so the log gets the space.
+ *
+ * Everything below the head goes, template controls included - they load into
+ * fields that are no longer on screen, and leaving half the card behind reads
+ * as broken rather than collapsed.
+ */
 function handleComposerToggle() {
   const expanded = els.btnComposerToggle.getAttribute("aria-expanded") === "true";
   els.btnComposerToggle.setAttribute("aria-expanded", String(!expanded));
-  els.composerBody.hidden = expanded;
+  els.composer.classList.toggle("is-collapsed", expanded);
   els.btnComposerToggle.querySelector(".chev").textContent = expanded ? "▸" : "▾";
 }
 
@@ -677,15 +717,17 @@ els.btnDownloadLogs.addEventListener("click", ui.downloadLogs);
 // INPUT VALIDATION
 // ============================================================================
 
-els.pubPayload.addEventListener("input", () => utils.validateJsonInput(els.pubPayload));
-els.kvValueInput.addEventListener("input", () => utils.validateJsonInput(els.kvValueInput));
+// Payloads and KV values are arbitrary bytes - `hello` and `42` are both
+// valid messages - so neither is validated as JSON while it is being typed,
+// and neither is silently reformatted on blur. Formatting is a button now:
+// ask for it and you get the parse error if it is not JSON after all.
+function formatInto(el) {
+  const err = utils.formatJson(el);
+  if (err) ui.showToast(`Not valid JSON - ${err}`, "error");
+}
 
-els.pubPayload.addEventListener("blur", () => {
-  if (utils.validateJsonInput(els.pubPayload)) utils.beautify(els.pubPayload);
-});
-els.kvValueInput.addEventListener("blur", () => {
-  if (utils.validateJsonInput(els.kvValueInput)) utils.beautify(els.kvValueInput);
-});
+els.btnFormatPayload.addEventListener("click", () => formatInto(els.pubPayload));
+els.btnKvFormat.addEventListener("click", () => formatInto(els.kvValueInput));
 
 // ============================================================================
 // KV STORE - BUCKETS
@@ -886,6 +928,7 @@ function setKvEditMode(isEdit) {
 
   els.kvValueInput.hidden = !isEdit;
   els.kvValueHighlighter.hidden = isEdit;
+  els.btnKvFormat.hidden = !isEdit;
   els.btnKvToggleMode.textContent = isEdit ? "👁 View" : "✎ Edit";
 
   if (isEdit) {
@@ -918,7 +961,7 @@ async function selectKeyWrapper(key) {
     const res = await nats.getKvValue(key);
     if (res) {
       els.kvValueInput.value = res.value;
-      utils.beautify(els.kvValueInput);
+      utils.formatJson(els.kvValueInput);
       setKvEditMode(false);
       els.kvRevLabel.textContent = `rev ${res.revision}`;
       ui.setKvStatus(`Loaded '${key}'`);
@@ -936,7 +979,7 @@ async function selectKeyWrapper(key) {
         els.kvValueHighlighter.textContent = "// [deleted revision]";
       } else {
         els.kvValueInput.value = entry.value;
-        utils.beautify(els.kvValueInput);
+        utils.formatJson(els.kvValueInput);
         renderKvValueView();
       }
 

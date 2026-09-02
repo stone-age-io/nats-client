@@ -533,6 +533,7 @@ button {
   border: 1px solid rgba(240,246,252,0.1);
   padding: 7px 14px; border-radius: var(--radius-sm);
   cursor: pointer; font-weight: 600; font-size: 0.82rem;
+  font-family: inherit; line-height: 1.4;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
 }
@@ -553,6 +554,20 @@ button.sm-btn {
   background: transparent; border: 1px solid var(--border);
 }
 button.sm-btn:hover:not(:disabled) { background: #21262d; }
+
+/* Select sized as a button, for toolbars where it sits in a row of them.
+   .bar-select is styled as an input - mono, larger, filled, and carrying the
+   shared input margin-bottom that lifted it off its neighbours' baseline. */
+select.sm-select {
+  width: auto; max-width: 150px; margin: 0;
+  padding: 4px 9px;
+  font-family: inherit; font-size: 0.74rem; font-weight: 600; line-height: 1.4;
+  color: #c9d1d9; background: transparent;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+select.sm-select:hover { background: #21262d; border-color: var(--muted); }
+select.sm-select option { background: var(--panel); color: var(--text); }
 
 button.danger { color: var(--danger); border-color: rgba(248,81,73,0.4); background: transparent; }
 button.danger:hover:not(:disabled) { background: rgba(248,81,73,0.1); border-color: var(--danger); color: var(--danger); }
@@ -599,8 +614,20 @@ button.disclosure.sm {
   display: flex; align-items: center; gap: var(--s2);
   padding: var(--s3);
 }
+/* One height across the templates group. A <select> and a <button> derive
+   their heights differently, so left to themselves they land a pixel or two
+   apart and the row reads as misaligned. */
+.composer .pane-head .pane-actions > * { height: 28px; }
+
 .composer-row #pubSubject { margin: 0; flex: 1; min-width: 0; }
 .composer-send { display: flex; gap: var(--s2); flex-shrink: 0; }
+
+/* Collapsed: the title bar and nothing else. The template controls go too -
+   they load into fields that are no longer on screen. */
+.composer.is-collapsed .composer-row,
+.composer.is-collapsed .composer-body,
+.composer.is-collapsed .pane-actions { display: none; }
+.composer.is-collapsed .pane-head { border-bottom: none; }
 
 .composer-body {
   display: flex; flex-direction: column;
@@ -614,6 +641,9 @@ button.disclosure.sm {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--s3); margin-top: var(--s2); flex-wrap: wrap;
 }
+.composer-opts-group { display: flex; align-items: center; gap: var(--s3); }
+.composer-opts-group .disclosure.sm { align-self: center; margin-top: 0; }
+
 .inline-field {
   display: flex; align-items: center; gap: var(--s1); margin: 0;
   font-size: 0.72rem; color: var(--muted); font-weight: 600;
@@ -649,12 +679,30 @@ button.disclosure.sm {
 #subList li button { padding: 2px 7px; font-size: 0.7rem; flex-shrink: 0; }
 
 .sub-add {
-  display: flex; gap: var(--s2);
+  display: flex; flex-direction: column; gap: var(--s1);
   padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--border-soft);
   flex-shrink: 0;
 }
-.sub-add input { margin: 0; min-width: 0; }
+.sub-add-row { display: flex; gap: var(--s2); }
+.sub-add-row input { margin: 0; min-width: 0; }
+
+/* Tighter than the connection popover's check rows - this one sits in a
+   cramped pane header, not a dialog */
+.sub-add-opt { margin: 0; align-items: center; font-size: 0.72rem; }
+.sub-add-opt input { margin: 0; }
+.sub-add-opt.is-disabled { opacity: 0.45; cursor: not-allowed; }
+.sub-add-opt.is-disabled input { cursor: not-allowed; }
+
+/* Marks a subscription that is dropping $/_ traffic, so an absent $JS event
+   reads as "filtered" rather than "broken" */
+.sub-tag {
+  font-family: var(--font); font-style: normal;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; white-space: nowrap;
+  color: var(--muted); background: var(--border-soft);
+  border-radius: 3px; padding: 1px 4px; vertical-align: 1px;
+}
 
 /* Shared row style for bucket / key / stream lists */
 .list-row {
@@ -986,7 +1034,7 @@ dialog.app-dialog::backdrop { background: rgba(0,0,0,0.65); backdrop-filter: blu
      instead of orphaning the delete button on a third row */
   .composer .pane-head { flex-wrap: wrap; }
   .composer .pane-head .pane-actions { flex: 1 1 100%; flex-wrap: nowrap; justify-content: flex-end; }
-  .composer .pane-head .bar-select { flex: 1; max-width: none; }
+  .composer .pane-head .sm-select { flex: 1; max-width: none; }
 
   /* Header rows stack key over value so neither is squeezed */
   .header-row { grid-template-columns: minmax(0, 1fr) auto; }

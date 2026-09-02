@@ -113,9 +113,15 @@
             <h3>Subscriptions <span id="subCount" class="accent">(0)</span></h3>
           </div>
           <div class="sub-add">
-            <input type="text" id="subSubject" list="subHistory" placeholder="subject.&gt;  (Enter to add)"
-                   autocorrect="off" autocapitalize="off" spellcheck="false" data-requires-conn />
-            <button id="btnSub" class="accent icon-btn" title="Subscribe" data-requires-conn>+</button>
+            <div class="sub-add-row">
+              <input type="text" id="subSubject" list="subHistory" placeholder="subject.&gt;  (Enter to add)"
+                     autocorrect="off" autocapitalize="off" spellcheck="false" data-requires-conn />
+              <button id="btnSub" class="accent icon-btn" title="Subscribe" data-requires-conn>+</button>
+            </div>
+            <label class="check-row sub-add-opt" id="excludeSystemRow">
+              <input type="checkbox" id="excludeSystemChk" checked />
+              <span>Hide system subjects <span class="muted-xs">($JS, $SYS, $KV, _INBOX&#8230;)</span></span>
+            </label>
           </div>
           <ul id="subList" class="list-scroll"></ul>
         </div>
@@ -131,7 +137,7 @@
                 <span class="chev" aria-hidden="true">&#9662;</span> Publish / Request
               </button>
               <div class="pane-actions">
-                <select id="templateSelect" class="bar-select sm" title="Message templates">
+                <select id="templateSelect" class="sm-select" title="Message templates">
                   <option value="">-- Templates --</option>
                 </select>
                 <button id="btnTemplateSave" class="sm-btn" title="Save subject/payload/headers as a template">Save</button>
@@ -153,10 +159,13 @@
                         autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
 
               <div class="composer-opts">
-                <button id="btnHeaderToggle" class="disclosure sm" aria-expanded="false" aria-controls="headerContainer">
-                  <span class="chev" aria-hidden="true">&#9656;</span> Headers
-                  <span id="headerCount" class="pill-count" hidden>0</span>
-                </button>
+                <div class="composer-opts-group">
+                  <button id="btnHeaderToggle" class="disclosure sm" aria-expanded="false" aria-controls="headerContainer">
+                    <span class="chev" aria-hidden="true">&#9656;</span> Headers
+                    <span id="headerCount" class="pill-count" hidden>0</span>
+                  </button>
+                  <button id="btnFormatPayload" class="sm-btn" title="Pretty-print the payload as JSON">Format</button>
+                </div>
                 <label class="inline-field">
                   Req timeout
                   <input type="number" id="reqTimeout" value="2000" class="sm-input timeout"
@@ -257,6 +266,7 @@
               <div class="mini-toolbar">
                 <button id="btnKvToggleMode" class="sm-btn fixed-w-lg">&#9998; Edit</button>
                 <button id="btnKvCopy" class="sm-btn">Copy</button>
+                <button id="btnKvFormat" class="sm-btn" title="Pretty-print the value as JSON" hidden>Format</button>
                 <span id="kvRevLabel" class="muted-xs push-right"></span>
               </div>
               <textarea id="kvValueInput" class="value-edit" placeholder="Value"

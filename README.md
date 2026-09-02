@@ -19,8 +19,9 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 *   **Subscribe:** Real-time message logging with JSON auto-formatting and syntax highlighting.
 *   **Request/Reply:** Perform RPC calls with configurable timeouts.
 *   **Message Templates:** Save subject/payload/headers combos as named templates - like a Postman collection for NATS.
+*   **Hide system subjects:** Subscribing to `>` also picks up every `$JS`, `$SYS`, `$KV` and `_INBOX` message, which is rarely what "everything" means. Tick the box under the subject field to drop them client-side; the setting sticks, and filtered subscriptions are marked **no sys** in the list.
 *   **QoL:**
-    *   **Persistent Subscriptions:** Subscriptions are remembered per server and automatically restored on reconnect.
+    *   **Persistent Subscriptions:** Subscriptions are remembered per server and automatically restored on reconnect, filter setting included.
     *   **Click-to-Fill:** Click a subscription subject to immediately target it for publishing.
     *   **Local History:** Remembers recently used subjects.
     *   **Pause/Resume:** Pause the log flow to inspect high-traffic subjects.
@@ -32,7 +33,7 @@ This tool acts as a web utility for NATS developers, providing a UI for Messagin
 *   **Real-time Watch:** The key list updates instantly when keys are added/removed by other clients.
 *   **CRUD:** Get, Put, Delete, and **Purge** keys (purge also removes revision history).
 *   **History:** View **Revision History** for any key to see how values changed over time.
-*   **UX:** One-click Copy for values, JSON validation.
+*   **UX:** One-click Copy for values, and a **Format** button that pretty-prints a value when it is JSON.
 
 ### Stream Management
 *   **Admin:** List, Create, Edit, and Delete JetStream Streams.
@@ -101,10 +102,22 @@ and the tooltip carries the name and the full URL.
 ### Messaging Tab
 *   **Subscribe:** type a subject in the left pane and press Enter. Click a
     subject in the list to copy it into the publish field.
+*   **Hide system subjects:** on by default. It only applies to wildcard
+    subjects like `>` or `*.foo` - core NATS has no "everything except"
+    pattern, so the exclusion is a client-side drop, and on a subject like
+    `$JS.EVENT.>` it would leave nothing to show. The box greys out to say so.
 *   **Publish / Request:** fill in the subject and payload, then **Pub** or
     **Req**. `Ctrl + Enter` in the payload publishes.
 *   Collapse the composer with the **Publish / Request** disclosure to give the
-    log the full pane while watching traffic.
+    log the full pane while watching traffic. It folds down to the title bar -
+    the template controls go too, since they load into fields that are no
+    longer on screen.
+*   **Payloads are not validated as JSON.** A NATS message is arbitrary bytes,
+    so `hello` and `42` are both perfectly good payloads and neither is
+    flagged while you type. **Format** pretty-prints the payload on demand and
+    reports the parse error if it turns out not to be JSON. Stream, consumer
+    and bucket configs *are* still validated strictly - there JSON is the
+    required format, not one option among many.
 
 ### KV Store Tab
 Three panes: **Buckets → Keys → key detail**.

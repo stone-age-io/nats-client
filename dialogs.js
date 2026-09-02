@@ -87,11 +87,17 @@ function shell(title, { narrow = false, onSettle = () => {}, cancelValue } = {})
   return { dialog, form, body, foot, finish };
 }
 
-/** Add a footer button. Submit buttons also fire on Enter inside the form. */
-function footButton(foot, label, { className = "sm-btn", type = "button" } = {}) {
+/**
+ * Add a footer button. Submit buttons also fire on Enter inside the form.
+ *
+ * Footer buttons keep the base button size; only the colour separates Cancel
+ * from the confirm action. Cancel used to be a .sm-btn, which sat visibly
+ * shorter than the primary button beside it.
+ */
+function footButton(foot, label, { className = "", type = "button" } = {}) {
   const btn = document.createElement("button");
   btn.type = type;
-  btn.className = className;
+  if (className) btn.className = className;
   btn.textContent = label;
   foot.append(btn);
   return btn;

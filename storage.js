@@ -16,6 +16,7 @@ const KEYS = {
   PROFILES: "nats_profiles",
   TEMPLATES: "nats_msg_templates",
   SAVED_SUBS: "nats_saved_subs",
+  EXCLUDE_SYSTEM: "nats_exclude_system",
   LOG_NEWEST_FIRST: "nats_log_newest_first",
   PANE_SIZES: "nats_pane_sizes",
 };
@@ -188,32 +189,57 @@ export function deleteTemplate(name) {
 // ============================================================================
 // SAVED SUBSCRIPTIONS (per server URL)
 // ============================================================================
-// Map of { url: [subjects] } - restored automatically on connect
+// Map of { url: [{ subject, excludeSystem }] } - restored on connect.
+// Entries written before the excludeSystem option existed are bare strings;
+// they read back as "do not exclude", which is what they used to do.
+
+function normalizeSub(entry) {
+  if (typeof entry === "string") return { subject: entry, excludeSystem: false };
+  return { subject: entry.subject, excludeSystem: !!entry.excludeSystem };
+}
 
 export function getSavedSubscriptions(url) {
   const all = loadJson(KEYS.SAVED_SUBS, {});
-  return all[url] || [];
+  return (all[url] || []).map(normalizeSub);
 }
 
-export function addSavedSubscription(url, subject) {
+export function addSavedSubscription(url, subject, excludeSystem = false) {
   if (!url || !subject) return;
   const all = loadJson(KEYS.SAVED_SUBS, {});
-  const subs = all[url] || [];
-  if (!subs.includes(subject)) {
-    subs.push(subject);
-    all[url] = subs.slice(-MAX_SAVED_SUBS_PER_SERVER);
-    saveJson(KEYS.SAVED_SUBS, all);
-  }
+  const subs = (all[url] || []).map(normalizeSub);
+
+  // Same subject with a different filter setting replaces the old entry,
+  // so a re-subscribe is what gets restored next time
+  const existing = subs.find(s => s.subject === subject);
+  if (existing) existing.excludeSystem = !!excludeSystem;
+  else subs.push({ subject, excludeSystem: !!excludeSystem });
+
+  all[url] = subs.slice(-MAX_SAVED_SUBS_PER_SERVER);
+  saveJson(KEYS.SAVED_SUBS, all);
 }
 
 export function removeSavedSubscription(url, subject) {
   if (!url) return;
   const all = loadJson(KEYS.SAVED_SUBS, {});
   if (all[url]) {
-    all[url] = all[url].filter(s => s !== subject);
+    all[url] = all[url].map(normalizeSub).filter(s => s.subject !== subject);
     if (all[url].length === 0) delete all[url];
     saveJson(KEYS.SAVED_SUBS, all);
   }
+}
+
+// ============================================================================
+// EXCLUDE-SYSTEM-SUBJECTS PREFERENCE
+// ============================================================================
+// Sticky default for the subscribe box. Defaults to on: a bare `>` picking up
+// every $JS/$SYS/_INBOX message is rarely what someone means by "everything".
+
+export function getExcludeSystem() {
+  return localStorage.getItem(KEYS.EXCLUDE_SYSTEM) !== "false";
+}
+
+export function setExcludeSystem(exclude) {
+  localStorage.setItem(KEYS.EXCLUDE_SYSTEM, String(!!exclude));
 }
 
 // ============================================================================

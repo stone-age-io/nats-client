@@ -236,22 +236,56 @@ function startStatsLoop(onStats) {
 // ============================================================================
 
 /**
+ * Is this a system / internal subject?
+ *
+ * NATS reserves a leading `$` for server-side subjects ($SYS, $JS, $KV, $OBJ,
+ * $SRV, $MQTT, ...) and a leading `_` for client plumbing (_INBOX replies).
+ * Nothing an application publishes should start with either, so testing the
+ * first character is enough - and it stays correct as new $-prefixed
+ * subsystems appear, unlike a hard-coded prefix list.
+ */
+export function isSystemSubject(subject) {
+  const first = subject.charCodeAt(0);
+  return first === 36 /* $ */ || first === 95 /* _ */;
+}
+
+/**
+ * Would excluding system subjects change anything for this pattern?
+ *
+ * Core NATS has no "everything except" wildcard, so the exclusion has to be a
+ * client-side drop. It only means something when the pattern's first token is
+ * a wildcard: `>` and `*.foo` sweep up $/_ traffic the user never asked for,
+ * while `$JS.EVENT.>` asks for it deliberately and would otherwise be
+ * filtered down to nothing. No other pattern can match a system subject.
+ */
+export function canExcludeSystem(subject) {
+  const first = subject.split(".")[0];
+  return first === ">" || first === "*";
+}
+
+/**
  * Subscribe to a subject
  * @param {string} subject - NATS subject pattern
  * @param {function} onMessage - Callback for incoming messages (subject, data, isRpc, headers)
- * @returns {object} - { id, subject, size }
+ * @param {object} [opts] - { excludeSystem } drops $SYS/$JS/_INBOX traffic
+ * @returns {object} - { id, subject, excludeSystem, size }
  */
-export function subscribe(subject, onMessage) {
+export function subscribe(subject, onMessage, opts = {}) {
   if (!nc || nc.isClosed()) throw new Error("Not Connected");
-  
+
+  // Honour the request only where it is meaningful, so the flag we report
+  // back (and show in the UI) is what is actually happening
+  const excludeSystem = !!opts.excludeSystem && canExcludeSystem(subject);
+
   try {
     const sub = nc.subscribe(subject);
     const id = ++subCounter;
-    subscriptions.set(id, { sub, subject });
+    subscriptions.set(id, { sub, subject, excludeSystem });
     
     (async () => {
       try {
         for await (const m of sub) {
+          if (excludeSystem && isSystemSubject(m.subject)) continue;
           if (onMessage) onMessage(m.subject, decodePayload(m.data), false, m.headers);
         }
       } catch (e) {
@@ -259,7 +293,7 @@ export function subscribe(subject, onMessage) {
       }
     })();
     
-    return { id, subject, size: subscriptions.size };
+    return { id, subject, excludeSystem, size: subscriptions.size };
   } catch (error) {
     throw new Error(`Failed to subscribe to ${subject}: ${error.message}`);
   }

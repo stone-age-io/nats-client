@@ -36,12 +36,13 @@ export const els = {
   // --- Subscriptions --------------------------------------------------------
   subSubject: $("subSubject"),
   btnSub: $("btnSub"),
+  excludeSystemChk: $("excludeSystemChk"),
+  excludeSystemRow: $("excludeSystemRow"),
   subList: $("subList"),
   subCount: $("subCount"),
 
   // --- Messaging: composer --------------------------------------------------
   composer: $("composer"),
-  composerBody: $("composerBody"),
   btnComposerToggle: $("btnComposerToggle"),
   templateSelect: $("templateSelect"),
   btnTemplateSave: $("btnTemplateSave"),
@@ -53,6 +54,7 @@ export const els = {
   headerRows: $("headerRows"),
   headerCount: $("headerCount"),
   btnHeaderAdd: $("btnHeaderAdd"),
+  btnFormatPayload: $("btnFormatPayload"),
   reqTimeout: $("reqTimeout"),
   btnPub: $("btnPub"),
   btnReq: $("btnReq"),
@@ -89,6 +91,7 @@ export const els = {
   kvValueHighlighter: $("kvValueHighlighter"),
   btnKvToggleMode: $("btnKvToggleMode"),
   btnKvCopy: $("btnKvCopy"),
+  btnKvFormat: $("btnKvFormat"),
   kvRevLabel: $("kvRevLabel"),
   kvHistoryList: $("kvHistoryList"),
   kvHistoryCount: $("kvHistoryCount"),
