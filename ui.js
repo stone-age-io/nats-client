@@ -697,6 +697,15 @@ export function setNewestFirst(value, { reflow = true } = {}) {
     ? "New messages arrive at the top - click for newest last"
     : "New messages arrive at the bottom - click for newest first";
 
+  // The jump pill has to follow the log direction. Left pinned to the bottom
+  // pointing down, it sends you to the top in newest-first mode - the
+  // opposite of what it shows.
+  els.jumpArrow.textContent = newestFirst ? "⇧" : "⇩";
+  els.btnJumpLatest.classList.toggle("at-top", newestFirst);
+  els.btnJumpLatest.title = newestFirst
+    ? "Jump to the newest messages at the top"
+    : "Jump to the newest messages at the bottom";
+
   if (reflow) {
     const entries = [...els.messages.children];
     if (entries.length > 1) els.messages.replaceChildren(...entries.reverse());

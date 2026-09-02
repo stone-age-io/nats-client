@@ -67,6 +67,7 @@ export const els = {
   btnDownloadLogs: $("btnDownloadLogs"),
   btnLogOrder: $("btnLogOrder"),
   btnJumpLatest: $("btnJumpLatest"),
+  jumpArrow: $("jumpArrow"),
   jumpCount: $("jumpCount"),
 
   // --- KV: buckets ----------------------------------------------------------

@@ -328,12 +328,16 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 /* Positioning context for the jump-to-latest pill */
 .log-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Sits at the end of the log where new messages land, so the arrow always
+   points the way the click will actually travel. Newest-first puts that end
+   at the top - see .at-top below. */
 .jump-latest {
   position: absolute; bottom: var(--s3); left: 50%; transform: translateX(-50%);
   z-index: 5; padding: 5px 14px; border-radius: 100px;
   background: var(--accent-solid); color: #fff; border: none;
   font-size: 0.74rem; box-shadow: 0 4px 14px rgba(0,0,0,0.5);
 }
+.jump-latest.at-top { top: var(--s3); bottom: auto; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
 .jump-latest:hover { background: #388bfd; color: #fff; }
 
 .pane-head {
